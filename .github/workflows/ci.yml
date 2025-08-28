@@ -9,9 +9,6 @@ on:
 jobs:
   lint-test:
     runs-on: ubuntu-latest
-    env:                                          # <-- THIS IS THE KEY FIX
-      PYTHONPATH: ${{ github.workspace }}/src    # <-- It tells Python the full, absolute path to 'src'
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -20,12 +17,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      
-      - name: Install dependencies
+
+      - name: Install dependencies and project
         run: |
           python -m pip install --upgrade pip
           pip install ruff semgrep
           pip install -r requirements.txt
+          pip install .  # <-- THIS IS THE KEY COMMAND THAT INSTALLS YOUR 'APP' PACKAGE
 
       - name: Run Ruff (lint)
         run: ruff check .
