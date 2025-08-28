@@ -1,0 +1,9 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "Make manifest", "type": "shell", "command": "python tools/make_manifest.py" },
+    { "label": "Normalize imports (preview)", "type": "shell", "command": "python tools/normalize_imports.py" },
+    { "label": "Build RAG index (local)", "type": "shell", "command": "python tools/build_index.py" },
+    { "label": "Run semgrep rules", "type": "shell", "command": "semgrep --config semgrep-rules/ --no-git-ignore --strict" }
+  ]
+}

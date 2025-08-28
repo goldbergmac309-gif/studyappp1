@@ -1,0 +1,12 @@
+{
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "python.languageServer": "Pylance",
+  "files.exclude": {
+    "**/__pycache__": true,
+    ".venv": true,
+    "node_modules": true
+  }
+}
