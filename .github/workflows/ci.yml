@@ -13,8 +13,10 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}/src    # <-- The absolute path fix
 
     steps:
-      - name: Checkout code
+      - name: Checkout code (with submodules)
         uses: actions/checkout@v4
+        with:
+          submodules: recursive   # Ensure nested git repo at ./src is pulled so package code is present
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -26,6 +28,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install ruff semgrep
           pip install -r requirements.txt
+          # (Optional) install the project itself if/when pyproject is used
+          if [ -f pyproject.toml ]; then pip install -e .; fi
 
       - name: Run Ruff (lint)
         run: ruff check .
