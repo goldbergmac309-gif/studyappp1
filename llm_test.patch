@@ -1,0 +1,13 @@
+*** Begin Patch
+*** Add File: tools/LLM_TEST.txt
++LLM Test File
++---------------
++This file was added as a safe test of the LLM workflow.
++
++Steps exercised:
++- apply a patch
++- run semgrep / lint / tests
++- commit and revert if needed
++
++Remove this file after testing if desired.
+*** End Patch
