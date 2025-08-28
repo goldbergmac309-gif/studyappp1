@@ -31,4 +31,4 @@ jobs:
         run: semgrep --config=p/ci .
       
       - name: Run Pytest
-        run: pytest -q
+        run: python -m pytest -q  # This is the line we changed
