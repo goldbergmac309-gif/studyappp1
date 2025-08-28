@@ -17,6 +17,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      
+      # THIS IS THE NEW STEP THAT FIXES THE PROBLEM
+      - name: Add src to PYTHONPATH
+        run: echo "PYTHONPATH=src" >> $GITHUB_ENV
 
       - name: Install dependencies
         run: |
@@ -31,4 +35,4 @@ jobs:
         run: semgrep --config=p/ci .
       
       - name: Run Pytest
-        run: python -m pytest -q  # This is the line we changed
+        run: python -m pytest -q
