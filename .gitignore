@@ -1,0 +1,15 @@
+cat > .gitignore <<'EOT'
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment
+.env
+.venv
+venv/
+
+# IDE / Editor
+.vscode/
+EOT
