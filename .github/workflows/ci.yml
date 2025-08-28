@@ -9,6 +9,9 @@ on:
 jobs:
   lint-test:
     runs-on: ubuntu-latest
+    env:                                          # <-- THIS IS THE KEY FIX
+      PYTHONPATH: ${{ github.workspace }}/src    # <-- It tells Python the full, absolute path to 'src'
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -18,10 +21,6 @@ jobs:
         with:
           python-version: "3.12"
       
-      # THIS IS THE NEW STEP THAT FIXES THE PROBLEM
-      - name: Add src to PYTHONPATH
-        run: echo "PYTHONPATH=src" >> $GITHUB_ENV
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
