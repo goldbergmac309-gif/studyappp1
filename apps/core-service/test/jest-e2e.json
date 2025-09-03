@@ -5,5 +5,14 @@
   "testRegex": ".e2e-spec.ts$",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
-  }
+  },
+  "testRunner": "jest-circus/runner",
+  "reporters": ["default"],
+  "testTimeout": 60000,
+  "globals": {
+    "ts-jest": {
+      "isolatedModules": true
+    }
+  },
+  "runInBand": true
 }
