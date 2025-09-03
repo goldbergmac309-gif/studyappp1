@@ -1,0 +1,5 @@
+
+# Prisma
+.env
+*.sqlite
+*.sqlite-journal
