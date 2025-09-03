@@ -2,6 +2,7 @@
 import ast
 import hashlib
 import json
+import logging
 from pathlib import Path
 
 ROOT = Path(".")
@@ -40,14 +41,14 @@ def main() -> None:
         for p in ROOT.rglob("*"):
             if not p.is_file():
                 continue
-            if any(part in (".git", "venv", "node_modules", "__pycache__")
-                   for part in p.parts):
+            if any(part in (".git", "venv", "node_modules", "__pycache__") for part in p.parts):
                 continue
             if p.suffix not in EXTS:
                 continue
             try:
                 txt = p.read_text(encoding="utf-8", errors="ignore")
             except Exception:
+                logging.exception("Failed to read %s", p)
                 continue
             item = {
                 "path": str(p),

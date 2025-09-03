@@ -23,12 +23,10 @@ def main():
     alt = args.alt.rstrip("/")
     exts = set(e.strip() for e in args.exts.split(","))
 
-    print(
-        f"Verbose normalizer running. canonical='{canonical}' alt='{alt}' exts={exts}"
-    )
+    print(f"Verbose normalizer running. canonical='{canonical}' alt='{alt}' exts={exts}")
 
-    py_re = re.compile(r'(^\s*(?:from|import)\s+)(%s(?:[.\w/]*))' % re.escape(alt), re.M)
-    ts_re = re.compile(r'(from\s+[\'"])(%s(?:[\/\w\-.]*))([\'"])' % re.escape(alt))
+    py_re = re.compile(rf"(^\s*(?:from|import)\s+)({re.escape(alt)}(?:[.\w/]*))", re.M)
+    ts_re = re.compile(rf"(from\s+['\"])({re.escape(alt)}(?:[\/\w\-.]*))(['\"])")
 
     found_any = False
     files_checked = 0
@@ -36,10 +34,7 @@ def main():
     for path in ROOT.rglob("*"):
         if not path.is_file():
             continue
-        if any(
-            part in (".git", "venv", "node_modules", "__pycache__")
-            for part in path.parts
-        ):
+        if any(part in (".git", "venv", "node_modules", "__pycache__") for part in path.parts):
             continue
         if path.suffix not in exts:
             continue
@@ -76,9 +71,7 @@ def main():
                 for mm in m:
                     print("  >", mm.group(0).strip())
                 new = ts_re.sub(
-                    lambda mm: mm.group(1)
-                    + mm.group(2).replace(alt, canonical)
-                    + mm.group(3),
+                    lambda mm: mm.group(1) + mm.group(2).replace(alt, canonical) + mm.group(3),
                     text,
                 )
                 diff = "".join(

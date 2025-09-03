@@ -52,18 +52,17 @@ def scan():
     exts = set(e.strip() for e in args.exts.split(","))
 
     py_re = re.compile(
-        r'(^\s*(?:from|import)\s+)(%s(?:[.\w/]*))' % re.escape(alt),
+        rf"(^\s*(?:from|import)\s+)({re.escape(alt)}(?:[.\w/]*))",
         re.M,
     )
     ts_re = re.compile(
-        r'(from\s+[\'"])(%s(?:[\/\w\-.]*))([\'"])' % re.escape(alt),
+        rf"(from\s+['\"])({re.escape(alt)}(?:[\/\w\-.]*))(['\"])",
     )
 
     for path in ROOT.rglob("*"):
         if not path.is_file():
             continue
-        if any(part in (".git", "venv", "node_modules", "__pycache__")
-               for part in path.parts):
+        if any(part in (".git", "venv", "node_modules", "__pycache__") for part in path.parts):
             continue
         if path.suffix not in exts:
             continue
@@ -78,8 +77,7 @@ def scan():
         else:
             if ts_re.search(text):
                 new = ts_re.sub(
-                    lambda m: m.group(1) + m.group(2).replace(alt, canonical)
-                    + m.group(3),
+                    lambda m: m.group(1) + m.group(2).replace(alt, canonical) + m.group(3),
                     text,
                 )
         if new != text:
