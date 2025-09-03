@@ -1,50 +1,86 @@
-import axios from 'axios';
-import { exec } from 'child_process';
+import { Test, TestingModule } from '@nestjs/testing';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
+import request from 'supertest';
+import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('Auth Flow (e2e)', () => {
+  let app: INestApplication;
+  let prisma: PrismaService;
   const uniqueEmail = `test-${Date.now()}@example.com`;
   const password = 'password123';
-  const baseURL = 'http://localhost:3000';
 
-  it('should sign up a new user', async () => {
-    try {
-      const response = await axios.post(`${baseURL}/auth/signup`, {
-        email: uniqueEmail,
-        password: password,
-      });
-      expect(response.status).toBe(201);
-      expect(response.data).toHaveProperty('accessToken');
-      expect(response.data).toHaveProperty('user');
-      console.log('✅ Signup successful');
-    } catch (error) {
-      console.error('Signup failed:', error.response?.data || error.message);
-      throw error;
-    }
+  beforeAll(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    prisma = moduleFixture.get<PrismaService>(PrismaService);
+
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
+
+    await app.init();
+    // Clean user table before tests
+    await prisma.user.deleteMany();
   });
 
-  it('should log in the new user', async () => {
-    try {
-      const response = await axios.post(`${baseURL}/auth/login`, {
-        email: uniqueEmail,
-        password: password,
-      });
-      expect(response.status).toBe(200);
-      console.log('✅ Login with correct credentials successful');
-    } catch (error) {
-      console.error('Login failed:', error.response?.data || error.message);
-      throw error;
-    }
+  afterAll(async () => {
+    await prisma.user.deleteMany();
+    await app.close();
   });
 
-  it('should fail to log in with incorrect password', async () => {
-    try {
-      await axios.post(`${baseURL}/auth/login`, {
+  it('/auth/signup (POST) - should sign up a new user', () => {
+    return request(app.getHttpServer())
+      .post('/auth/signup')
+      .send({
+        email: uniqueEmail,
+        password: password,
+      })
+      .expect(201)
+      .then((res) => {
+        expect(res.body).toHaveProperty('accessToken');
+        expect(res.body).toHaveProperty('user');
+        expect(res.body.user.email).toBe(uniqueEmail);
+      });
+  });
+
+  it('/auth/login (POST) - should log in the new user', () => {
+    return request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        email: uniqueEmail,
+        password: password,
+      })
+      .expect(200)
+      .then((res) => {
+        expect(res.body).toHaveProperty('accessToken');
+      });
+  });
+
+  it('/auth/login (POST) - should fail to log in with incorrect password', () => {
+    return request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
         email: uniqueEmail,
         password: 'wrongpassword',
-      });
-    } catch (error) {
-      expect(error.response.status).toBe(401);
-      console.log('✅ Login with incorrect credentials failed as expected');
-    }
+      })
+      .expect(401);
+  });
+
+  it('/auth/signup (POST) - should fail to sign up with an existing email', () => {
+    return request(app.getHttpServer())
+      .post('/auth/signup')
+      .send({
+        email: uniqueEmail, // Use the same email again
+        password: 'anotherpassword',
+      })
+      .expect(409); // Conflict
   });
 });

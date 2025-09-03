@@ -1,49 +1,47 @@
-#  & ARCHITECTURAL STATE v3.0 - Synapse OS
+BLUEPRINT.md (Version 3.1 - The Subjects Expansion)
+code
+Markdown
+# BLUEPRINT & ARCHITECTURAL STATE v3.1 - Synapse OS
 
-**Document Status:** CANONICAL REALITY. This is your "Single Source of Truth." It is a precise map of the codebase's target state. All code you generate MUST conform perfectly to the structures and contracts defined herein.
+**Document Status:** CANONICAL REALITY. This is your "Single Source of Truth." All code MUST conform to the structures and contracts defined herein. This version officially incorporates the **Subjects Module**.
 
-**Current Focus: Phase 1, Sprint 1 - The Identity Core**
+**Current Focus: Phase 1, Sprint 2 - The Container Core**
 
 ## 1. Target Directory Structure (for `core-service`)
 
-After you complete the scaffolding task, this is the exact directory structure you must adhere to within `apps/core-service/src/`. You are **not permitted** to create new top-level directories under `src/` without explicit instruction.
-
+This structure is now expanded to include the `subjects` module.
 apps/core-service/src/
 ├── app.module.ts
 ├── main.ts
 ├── prisma/
-│ ├── schema.prisma # <--- DATABASE SCHEMA SSOT
-│ ├── prisma.module.ts # DI Module for Prisma
-│ └── prisma.service.ts # Injectable Prisma Client Service
+│ ├── schema.prisma # <--- DATABASE SCHEMA SSOT (UPDATED)
+│ ├── prisma.module.ts
+│ └── prisma.service.ts
 ├── config/
 │ ├── config.module.ts
-│ └── configuration.ts # Centralized Configuration
+│ └── configuration.ts
 ├── users/
-│ ├── users.module.ts
-│ ├── users.controller.ts
-│ ├── users.service.ts
+│ ├── ... (existing files)
 │ └── dto/
 │ └── create-user.dto.ts
+├── subjects/ # <--- NEW MODULE
+│ ├── subjects.module.ts
+│ ├── subjects.controller.ts
+│ ├── subjects.service.ts
+│ └── dto/
+│ └── create-subject.dto.ts
 └── auth/
-├── auth.module.ts
-├── auth.controller.ts
-├── auth.service.ts
-├── guards/
-│ └── jwt-auth.guard.ts
-└── strategies/
-└── jwt.strategy.ts
-
-
+├── ... (existing files)
+code
+Code
 ## 2. Data Contracts (The Law of Definition-First)
 
-These are the non-negotiable shapes of our data.
+The data contracts are now expanded.
 
 ### 2.1 Database Schema (`prisma/schema.prisma`)
-Update Section 2.1: Database Schema:
-REMOVE the old User model and the // NOTE... comment.
-ADD the following complete User and Subject models. Notice the crucial @relation field is now present.
+The `Subject` model is now active and its relation to `User` is officially defined.
 
-// --- START of UPDATED SECTION 2.1 ---
+```prisma
 generator client {
   provider = "prisma-client-js"
   output   = "../../../node_modules/.prisma/client"
@@ -55,14 +53,14 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(cuid())
-  email     String    @unique
+  id        String   @id @default(cuid())
+  email     String   @unique
   password  String
   name      String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  subjects Subject[] // Relation to Subjects
+  subjects Subject[] // Relation to subjects
 }
 
 model Subject {
@@ -71,40 +69,35 @@ model Subject {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // --- Relation Field ---
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
-// --- END of UPDATED SECTION 2.1 ---
-
-
 2.2 Shared DTOs (Data Transfer Objects)
-For this sprint, all DTOs will live inside their respective modules for simplicity (e.g., users/dto/). They MUST be class-based to support class-validator.
-users/dto/create-user.dto.ts:
+The new CreateSubjectDto is defined. It MUST be a class to support validation.
+subjects/dto/create-subject.dto.ts:
+code
+TypeScript
+import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
-
-export class CreateUserDto {
-  @IsEmail({}, { message: 'A valid email is required.' })
-  @IsNotEmpty()
-  email: string;
-
+export class CreateSubjectDto {
   @IsString()
-  @IsNotEmpty()
-  @MinLength(8, { message: 'Password must be at least 8 characters long.' })
-  password: string;
+  @IsNotEmpty({ message: 'Subject name cannot be empty.' })
+  @MaxLength(100, { message: 'Subject name cannot be longer than 100 characters.' })
+  name: string;
 }
-
-2.3 API Response Contracts (To Be Enforced by Tests)
-Login Response:
-
-export interface LoginResponse {
-  accessToken: string;
-  user: {
-    id: string;
-    email: string;
-  };
+2.3 API Response Contracts
+The SubjectResponse shape is officially defined.
+SubjectResponse:
+code
+TypeScript
+export interface SubjectResponse {
+  id: string;
+  name: string;
+  createdAt: string; // ISO 8601 date string
+  updatedAt: string; // ISO 8601 date string
 }
 
 
@@ -119,6 +112,7 @@ POST /auth/login
 Request Body: { email, password }
 Success (200) Response Body: LoginResponse
 Failure (401) Response: On invalid credentials.
+
 4. Canonical Implementations (Core Architectural Patterns)
 These are specific implementations that are non-negotiable to prevent architectural drift.
 Centralized Configuration (config/configuration.ts):

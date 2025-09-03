@@ -15,4 +15,16 @@ model User {
   name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  subjects  Subject[]
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to User (owner)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
