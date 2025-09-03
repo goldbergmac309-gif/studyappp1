@@ -3,7 +3,7 @@
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
   },
-  "python.languageServer": "Pylance",
+  "python.languageServer": "None",
   "files.exclude": {
     "**/__pycache__": true,
     ".venv": true,
