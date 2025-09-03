@@ -52,19 +52,30 @@ jobs:
         uses: pnpm/action-setup@v4
 
       - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --no-strict-dep-builds
 
-      - name: Approve build scripts (NestJS, bcrypt)
-        run: pnpm approve-builds -y || true
+      - name: Generate Prisma Client
+        working-directory: apps/core-service
+        env:
+          DATABASE_URL: file:./prisma/dev.db
+        run: pnpm prisma generate
 
       - name: Build core-service
         working-directory: apps/core-service
         run: pnpm build
 
+      - name: Prepare database (Prisma migrate deploy)
+        working-directory: apps/core-service
+        env:
+          DATABASE_URL: file:./prisma/dev.db
+        run: |
+          pnpm prisma migrate deploy
+
       - name: Start core-service in background
         working-directory: apps/core-service
         env:
           JWT_SECRET: test-ci-secret
+          DATABASE_URL: file:./prisma/dev.db
         run: |
           nohup pnpm start > server.log 2>&1 &
           sleep 5
