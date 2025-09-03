@@ -83,5 +83,6 @@ jobs:
       - name: Run core-service e2e tests
         working-directory: apps/core-service
         env:
+          JWT_SECRET: test-ci-secret
           DATABASE_URL: file:./prisma/dev.db
         run: pnpm test:e2e
