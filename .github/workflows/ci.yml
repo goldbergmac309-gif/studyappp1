@@ -51,8 +51,8 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
-      - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile --no-strict-dep-builds
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma Client
         working-directory: apps/core-service
