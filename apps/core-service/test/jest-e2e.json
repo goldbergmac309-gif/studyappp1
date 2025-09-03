@@ -6,13 +6,5 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
-  "testRunner": "jest-circus/runner",
-  "reporters": ["default"],
-  "testTimeout": 60000,
-  "globals": {
-    "ts-jest": {
-      "isolatedModules": true
-    }
-  },
-  "runInBand": true
+  "testTimeout": 60000
 }
