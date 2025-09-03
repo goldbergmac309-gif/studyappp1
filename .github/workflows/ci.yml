@@ -82,4 +82,6 @@ jobs:
 
       - name: Run core-service e2e tests
         working-directory: apps/core-service
-        run: pnpm test:e2e test/auth.e2e-spec.ts
+        env:
+          DATABASE_URL: file:./prisma/dev.db
+        run: pnpm test:e2e
