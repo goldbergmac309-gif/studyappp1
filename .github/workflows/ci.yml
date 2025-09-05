@@ -23,7 +23,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install ruff semgrep
           pip install -r requirements.txt
-          pip install -e .  # Installs your app in "editable" mode
 
       - name: Run Ruff (format)
         run: ruff format .
@@ -55,7 +54,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Approve PNPM build scripts (Prisma, NestJS, bcrypt)
-        run: pnpm approve-builds @prisma/client prisma @nestjs/core @prisma/engines bcrypt
+        run: pnpm approve-builds -y @prisma/client prisma @nestjs/core @prisma/engines bcrypt || true
 
       - name: Generate Prisma Client
         working-directory: apps/core-service

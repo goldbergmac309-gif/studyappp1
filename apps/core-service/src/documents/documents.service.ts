@@ -2,7 +2,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { QueueService } from '../queue/queue.service';
-import { Status } from '@prisma/client';
 import cuid from 'cuid';
 
 @Injectable()
@@ -35,7 +34,7 @@ export class DocumentsService {
           filename: file.originalname || 'upload',
           s3Key,
           subjectId,
-          status: Status.UPLOADED,
+          status: 'UPLOADED',
         },
       });
       created = true;
@@ -51,16 +50,16 @@ export class DocumentsService {
 
       await this.prisma.document.update({
         where: { id: documentId },
-        data: { status: Status.QUEUED },
+        data: { status: 'QUEUED' },
       });
 
-      return { id: doc.id, status: Status.QUEUED };
+      return { id: doc.id, status: 'QUEUED' };
     } catch (err) {
       if (created) {
         try {
           await this.prisma.document.update({
             where: { id: documentId },
-            data: { status: Status.FAILED },
+            data: { status: 'FAILED' },
           });
         } catch {
           /* ignore cleanup errors */
@@ -101,7 +100,7 @@ export class DocumentsService {
     if (!doc) {
       throw new NotFoundException('Document not found');
     }
-    if (!doc.analysisResult || doc.status !== Status.COMPLETED) {
+    if (!doc.analysisResult || doc.status !== 'COMPLETED') {
       // Analysis not yet available or failed
       throw new NotFoundException('Analysis not available');
     }
