@@ -103,10 +103,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install oracle-service dependencies
-        working-directory: apps/oracle-service
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r ./apps/oracle-service/requirements.txt
 
       - name: Run oracle-service tests
         working-directory: apps/oracle-service
