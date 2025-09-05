@@ -1,0 +1,7 @@
+[tool.ruff.lint]
+extend-ignore = [
+    "S101",  # Use of assert detected (fine in tests)
+    "E501",  # Line too long (handled by formatter)
+    "B904",  # Within except clause, raise exceptions with raise ... from err
+    "E402",  # Module level import not at top of file (conditional imports)
+]

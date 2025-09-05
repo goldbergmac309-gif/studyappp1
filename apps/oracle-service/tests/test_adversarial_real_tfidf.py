@@ -1,12 +1,12 @@
+# ruff: noqa: S101
 import io
 import json
 
 import boto3
+import config as cfg
 import fitz  # PyMuPDF
 import requests_mock
 from moto import mock_aws
-
-import config as cfg
 from workers.analysis_worker import process_document
 
 
@@ -51,11 +51,13 @@ def _run_pipeline_and_capture_keywords(monkeypatch, text: str):
             m.put(url, status_code=200, json={"ok": True})
 
             # Act
-            result = process_document.run({
-                "documentId": doc_id,
-                "s3Key": key,
-                "userId": "user-1",
-            })
+            result = process_document.run(
+                {
+                    "documentId": doc_id,
+                    "s3Key": key,
+                    "userId": "user-1",
+                }
+            )
             assert result.get("status") == "ok"
 
             # Inspect the request body that was sent
@@ -70,14 +72,10 @@ def test_sample_A_keywords(monkeypatch):
     text = "The primary focus of cellular biology is the mitochondrion."
     keywords = _run_pipeline_and_capture_keywords(monkeypatch, text)
     # Assert signal terms present
-    assert any("mitochondrion" in t for t in keywords) or any(
-        "cellular" in t for t in keywords
-    )
+    assert any("mitochondrion" in t for t in keywords) or any("cellular" in t for t in keywords)
 
 
 def test_sample_B_keywords(monkeypatch):
     text = "Quantum electrodynamics is governed by complex equations."
     keywords = _run_pipeline_and_capture_keywords(monkeypatch, text)
-    assert any("quantum" in t for t in keywords) or any(
-        "electrodynamics" in t for t in keywords
-    )
+    assert any("quantum" in t for t in keywords) or any("electrodynamics" in t for t in keywords)
