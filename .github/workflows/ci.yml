@@ -54,6 +54,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Approve PNPM build scripts (Prisma, NestJS, bcrypt)
+        run: pnpm approve-builds @prisma/client prisma @nestjs/core @prisma/engines bcrypt
+
       - name: Generate Prisma Client
         working-directory: apps/core-service
         env:
@@ -86,3 +89,24 @@ jobs:
           JWT_SECRET: test-ci-secret
           DATABASE_URL: file:./prisma/dev.db
         run: pnpm test:e2e
+
+  oracle-service:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install oracle-service dependencies
+        working-directory: apps/oracle-service
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run oracle-service tests
+        working-directory: apps/oracle-service
+        run: pytest -q
