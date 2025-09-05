@@ -1,3 +1,13 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# Allowlist dependencies whose install scripts must run in CI
+# See: https://pnpm.io/settings#onlybuiltdependencies
+onlyBuiltDependencies:
+  - "@prisma/client"
+  - "prisma"
+  - "@prisma/engines"
+  - "bcrypt"
+  - "@nestjs/core"
+  - "unrs-resolver"
