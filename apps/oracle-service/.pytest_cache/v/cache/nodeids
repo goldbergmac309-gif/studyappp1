@@ -1,0 +1,7 @@
+[
+  "tests/test_adversarial_real_tfidf.py::test_sample_A_keywords",
+  "tests/test_adversarial_real_tfidf.py::test_sample_B_keywords",
+  "tests/test_pdf_text.py::test_extract_text_single_page",
+  "tests/test_tfidf.py::test_top_keywords_basic_text",
+  "tests/test_worker_integration.py::test_process_document_end_to_end_with_mocks"
+]
