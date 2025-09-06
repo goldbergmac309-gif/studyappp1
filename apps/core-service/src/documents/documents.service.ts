@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { S3Service } from '../s3/s3.service';
-import { QueueService } from '../queue/queue.service';
+import { S3Service } from 'src/s3/s3.service';
+import { QueueService } from 'src/queue/queue.service';
 import cuid from 'cuid';
 
 @Injectable()
