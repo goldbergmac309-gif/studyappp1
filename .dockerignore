@@ -1,0 +1,26 @@
+# Root dockerignore to keep build contexts small
+
+# VCS
+.git
+
+# Node
+node_modules/
+**/node_modules/
+**/*.tsbuildinfo
+apps/client/.next/
+
+# Python
+__pycache__/
+**/__pycache__/
+.venv/
+.venv-oracle/
+
+# Build outputs
+apps/core-service/dist/
+apps/core-service/coverage/
+apps/core-service/.env
+apps/core-service/prisma/*.db
+
+# Tests and local artifacts
+apps/core-service/test/
+apps/oracle-service/tests/

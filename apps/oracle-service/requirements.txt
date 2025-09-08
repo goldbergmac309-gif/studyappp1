@@ -8,3 +8,5 @@ python-dotenv==1.0.1
 loguru==0.7.2
 requests-mock==1.11.0
 moto==5.0.9
+fastapi==0.115.6
+uvicorn==0.34.0

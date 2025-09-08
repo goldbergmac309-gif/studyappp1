@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  HeadBucketCommand,
+} from '@aws-sdk/client-s3';
 
 @Injectable()
 export class S3Service {
@@ -44,5 +48,20 @@ export class S3Service {
       ContentType: contentType || 'application/octet-stream',
     });
     await this.client.send(cmd);
+  }
+
+  /**
+   * Simple health check: verify the configured bucket is reachable.
+   * If no bucket is configured, return null so callers can decide policy.
+   */
+  async checkHealth(): Promise<boolean | null> {
+    if (!this.bucket) return null;
+    try {
+      const cmd = new HeadBucketCommand({ Bucket: this.bucket });
+      await this.client.send(cmd);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
