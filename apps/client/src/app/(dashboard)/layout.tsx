@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import Header from "@/app/(dashboard)/_components/header"
 import Sidebar from "@/app/(dashboard)/_components/sidebar"
+import HealthBanner from "@/components/health-banner"
 
 export default function ProtectedLayout({ children }: PropsWithChildren) {
   const { token } = useAuth()
@@ -54,6 +55,7 @@ export default function ProtectedLayout({ children }: PropsWithChildren) {
   // Authenticated shell
   return (
     <div className="min-h-screen">
+      <HealthBanner />
       <Header />
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-4 md:grid-cols-[220px_1fr] md:px-6 md:py-6">
         <aside className="hidden md:block">

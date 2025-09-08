@@ -57,6 +57,57 @@ $ pnpm run test:e2e
 $ pnpm run test:cov
 ```
 
+## Environment Variables
+
+Set the following variables (e.g., in `.env`) for local development. CI will inject required secrets as needed.
+
+```bash
+# Core
+DATABASE_URL="file:./prisma/dev.db"  # SQLite local dev
+JWT_SECRET=your-jwt-secret
+
+# S3
+AWS_REGION=your-aws-region
+AWS_S3_BUCKET=your-bucket-name
+# Optional for S3-compatible endpoints (e.g., MinIO)
+AWS_S3_ENDPOINT=http://localhost:9000
+AWS_S3_FORCE_PATH_STYLE=true
+
+# RabbitMQ
+RABBITMQ_URL=amqp://localhost:5672
+
+# Internal API key for oracle callback
+INTERNAL_API_KEY=dev-internal-key
+```
+
+## Health Endpoints
+
+This service exposes Kubernetes-friendly health endpoints using `@nestjs/terminus`:
+
+- Liveness: `GET /health/live` — returns `200 OK` if the process is responsive.
+- Readiness: `GET /health/ready` — returns `200 OK` when dependencies are healthy; otherwise `503 Service Unavailable`.
+
+Readiness checks include:
+
+- Database (Prisma/SQL)
+- RabbitMQ queue availability (optional if not configured)
+- S3 bucket accessibility (optional if not configured)
+
+Example responses:
+
+```json
+{
+  "status": "ok",
+  "info": {
+    "database": { "status": "up" },
+    "queue": { "status": "up" },
+    "s3": { "status": "up" }
+  }
+}
+```
+
+When degraded, the endpoint responds with HTTP 503 and a body describing failing indicators.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
