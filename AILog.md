@@ -60,5 +60,47 @@
 - Add a small battery of regression tests to validate callback contracts and database transitions (mock PDF, deterministic TF‑IDF fixtures).
 - Expand analysis pipeline metrics (page count, byte size) into user-facing analytics in subsequent sprints.
 
----
 Documented by Cascade following canonical architecture and constraints defined in `BLUEPRINT.md` and `DOCTRINE.md`. This entry establishes the verified baseline for future E2E automation.
+
+
+## 2025-09-09 — Phase 3.X Production Readiness — Status: COMPLETE
+
+### Executive Summary
+- Completed and merged the three pillars of Production Readiness:
+  1) Health & Observability Layer (PR #1)
+  2) CI Plumbing with GHCR + Docker healthchecks (PR #2)
+  3) Secrets Management via Doppler (PR #3)
+- Result: The system is not only functional but deployable with security, observability, and CI rigor.
+
+### Major Accomplishments
+1) Health & Observability Layer (PR #1)
+   - `core-service` exposes `GET /health/live` and `GET /health/ready` via `@nestjs/terminus`.
+   - Indicators: Database (Prisma), Queue (RabbitMQ), S3 (MinIO/AWS) with optional readiness for RMQ/S3; DB is mandatory.
+   - `oracle-service` FastAPI health endpoints mirror the readiness semantics.
+   - E2E tests validate both healthy (200) and degraded (503) states.
+
+2) CI Plumbing (PR #2)
+   - Multi-stage Dockerfiles for `core-service` and `oracle-service` with HTTP health checks.
+   - GH Actions workflow builds and publishes images to GHCR.
+   - Production `docker-compose` with Postgres, RabbitMQ, MinIO, and both services; health checks wired to `/health` endpoints.
+
+3) Secrets Management (PR #3)
+   - Doppler is the single source of truth for all secrets (dev/staging/prod).
+   - CI integrates `dopplerhq/cli-action` to fetch secrets at job runtime; no secrets embedded in images.
+   - Production Compose refactored to env-driven and intended to run with `doppler run -- docker compose ...`.
+   - Repository docs updated to make Doppler the only supported method for secrets.
+
+### Security & Operational Posture
+- No `.env` files in production workflows; secrets injected at runtime.
+- Optional dependencies (queue/S3) are reflected as optional in readiness checks to avoid false negatives.
+- Centralized configuration prevents drift and enforces the Single Source of Truth doctrine.
+
+### CI/CD State
+- Health tests pass; client typecheck/lint pass.
+- GHCR images build/publish via GitHub Actions; Doppler gating verified.
+
+### Release Tag
+- Created annotated tag `v0.1.0` with message: "v0.1.0: Stable - Phase 3.X Production Readiness Complete".
+
+---
+Documented by Cascade (Forge) following canonical architecture and constraints defined in `BLUEPRINT.md`, `DOCTRINE.md`, and `PROJECT_OVERVIEW.md`. This entry marks the conclusion of the Production Readiness Sprint for the Synapse OS MVP.
