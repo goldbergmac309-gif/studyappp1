@@ -57,6 +57,61 @@ $ pnpm run test:e2e
 $ pnpm run test:cov
 ```
 
+## Secrets & Local Development (Doppler)
+
+This service uses Doppler as the single source of truth for secrets. Do not use `.env` files.
+
+### One-time setup
+
+```bash
+brew install dopplerhq/cli/doppler
+doppler login
+doppler configure set project studyapp
+doppler configure set config dev
+```
+
+### Run in development
+
+```bash
+doppler run -- pnpm start:dev
+```
+
+Common secrets managed in Doppler:
+
+- `DATABASE_URL` (SQLite for dev, Postgres for prod)
+- `JWT_SECRET`
+- `RABBITMQ_URL`
+- `AWS_REGION`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `AWS_S3_FORCE_PATH_STYLE`
+- `INTERNAL_API_KEY`
+
+## Health Endpoints
+
+This service exposes Kubernetes-friendly health endpoints using `@nestjs/terminus`:
+
+- Liveness: `GET /health/live` — returns `200 OK` if the process is responsive.
+- Readiness: `GET /health/ready` — returns `200 OK` when dependencies are healthy; otherwise `503 Service Unavailable`.
+
+Readiness checks include:
+
+- Database (Prisma/SQL)
+- RabbitMQ queue availability (optional if not configured)
+- S3 bucket accessibility (optional if not configured)
+
+Example responses:
+
+```json
+{
+  "status": "ok",
+  "info": {
+    "database": { "status": "up" },
+    "queue": { "status": "up" },
+    "s3": { "status": "up" }
+  }
+}
+```
+
+When degraded, the endpoint responds with HTTP 503 and a body describing failing indicators.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

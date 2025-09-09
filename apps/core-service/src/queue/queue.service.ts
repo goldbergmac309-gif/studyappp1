@@ -1,7 +1,10 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { connect } from 'amqplib';
-import type { Connection as AmqpConnection, Channel as AmqpChannel } from 'amqplib';
+import type {
+  Connection as AmqpConnection,
+  Channel as AmqpChannel,
+} from 'amqplib';
 
 type RmqConnection = AmqpConnection & {
   createChannel: () => Promise<AmqpChannel>;
@@ -58,10 +61,30 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     const ok = this.channel.sendToQueue(
       this.queueName,
       Buffer.from(JSON.stringify(payload)),
-      { persistent: true },
+      {
+        persistent: true,
+        contentType: 'application/json',
+        contentEncoding: 'utf-8',
+      },
     );
     if (!ok) {
       throw new Error('Failed to enqueue job: internal buffer full');
+    }
+  }
+
+  /**
+   * Health check for RabbitMQ.
+   * Returns true if channel is open and queue is accessible. Returns null if RMQ is not configured.
+   */
+  async checkHealth(): Promise<boolean | null> {
+    if (!this.url) return null;
+    try {
+      if (!this.channel) return false;
+      // checkQueue throws if the queue does not exist or channel is closed
+      await this.channel.checkQueue(this.queueName);
+      return true;
+    } catch {
+      return false;
     }
   }
 }
