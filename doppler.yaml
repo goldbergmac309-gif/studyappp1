@@ -1,0 +1,14 @@
+# doppler.yaml
+# Centralized Doppler project/config defaults for this repo. Safe to commit.
+
+setup:
+  project: studyapp
+  config: dev
+
+environments:
+  dev:
+    config: dev
+  staging:
+    config: staging
+  prod:
+    config: prod

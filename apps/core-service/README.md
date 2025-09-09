@@ -57,28 +57,32 @@ $ pnpm run test:e2e
 $ pnpm run test:cov
 ```
 
-## Environment Variables
+## Secrets & Local Development (Doppler)
 
-Set the following variables (e.g., in `.env`) for local development. CI will inject required secrets as needed.
+This service uses Doppler as the single source of truth for secrets. Do not use `.env` files.
+
+### One-time setup
 
 ```bash
-# Core
-DATABASE_URL="file:./prisma/dev.db"  # SQLite local dev
-JWT_SECRET=your-jwt-secret
-
-# S3
-AWS_REGION=your-aws-region
-AWS_S3_BUCKET=your-bucket-name
-# Optional for S3-compatible endpoints (e.g., MinIO)
-AWS_S3_ENDPOINT=http://localhost:9000
-AWS_S3_FORCE_PATH_STYLE=true
-
-# RabbitMQ
-RABBITMQ_URL=amqp://localhost:5672
-
-# Internal API key for oracle callback
-INTERNAL_API_KEY=dev-internal-key
+brew install dopplerhq/cli/doppler
+doppler login
+doppler configure set project studyapp
+doppler configure set config dev
 ```
+
+### Run in development
+
+```bash
+doppler run -- pnpm start:dev
+```
+
+Common secrets managed in Doppler:
+
+- `DATABASE_URL` (SQLite for dev, Postgres for prod)
+- `JWT_SECRET`
+- `RABBITMQ_URL`
+- `AWS_REGION`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `AWS_S3_FORCE_PATH_STYLE`
+- `INTERNAL_API_KEY`
 
 ## Health Endpoints
 
