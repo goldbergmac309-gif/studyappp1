@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
 import { PrismaHealthIndicator } from './indicators/prisma.indicator';
 import { QueueHealthIndicator } from './indicators/queue.indicator';
@@ -23,11 +23,16 @@ export class HealthController {
 
   @Get('ready')
   @HealthCheck()
-  checkReady() {
-    return this.health.check([
-      () => this.prisma.isHealthy('database'),
-      () => this.queue.isHealthy('queue'),
-      () => this.s3.isHealthy('s3'),
-    ]);
+  async checkReady() {
+    try {
+      return await this.health.check([
+        () => this.prisma.isHealthy('database'),
+        () => this.queue.isHealthy('queue'),
+        () => this.s3.isHealthy('s3'),
+      ]);
+    } catch {
+      // Normalize any underlying error (including generic Error) to 503
+      throw new ServiceUnavailableException('Service Unavailable');
+    }
   }
 }

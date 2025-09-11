@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { Suspense } from "react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { SignupForm } from "@/components/auth/SignupForm"
 
@@ -11,7 +12,9 @@ export default function SignupPage() {
           <CardDescription>Join Synapse OS. Create your account to get started.</CardDescription>
         </CardHeader>
         <CardContent>
-          <SignupForm />
+          <Suspense fallback={<div className="text-sm text-muted-foreground">Loading...</div>}>
+            <SignupForm />
+          </Suspense>
         </CardContent>
         <CardFooter>
           <p className="text-sm text-muted-foreground">

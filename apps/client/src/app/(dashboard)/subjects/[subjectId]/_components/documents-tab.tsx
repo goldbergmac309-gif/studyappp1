@@ -1,54 +1,60 @@
 "use client"
 
-import React, { forwardRef } from "react"
+import React, { forwardRef, useCallback, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Skeleton } from "@/components/ui/skeleton"
-import { UploadCloud, FileText } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-
-export type DocStatus = "UPLOADED" | "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED"
-export interface DocumentItem {
-  id: string
-  filename: string
-  status: DocStatus
-  createdAt?: string
-}
-
-function statusVariant(s: DocStatus): "default" | "secondary" | "destructive" | "outline" {
-  switch (s) {
-    case "COMPLETED":
-      return "default"
-    case "PROCESSING":
-    case "QUEUED":
-      return "secondary"
-    case "FAILED":
-      return "destructive"
-    default:
-      return "outline"
-  }
-}
+import { UploadCloud } from "lucide-react"
+import DocumentsList from "./documents-list"
+import { useSubjectStore } from "@/lib/subject-store"
 
 type DocumentsTabProps = {
-  docs: DocumentItem[] | null
-  docsLoading: boolean
-  docsError: string | null
   uploading: boolean
   uploadProgress: number
   onSelectFiles: (files: FileList | File[]) => void
+  onRetry?: () => void
 }
 
-const DocumentsTab = forwardRef<HTMLInputElement, DocumentsTabProps>(function DocumentsTab({
-  docs,
-  docsLoading,
-  docsError,
-  uploading,
-  uploadProgress,
-  onSelectFiles,
-}, ref) {
+const DocumentsTab = forwardRef<HTMLInputElement, DocumentsTabProps>(function DocumentsTab(
+  { uploading, uploadProgress, onSelectFiles, onRetry },
+  ref
+) {
+  const router = useRouter()
+  const search = useSearchParams()
+  const selectedParam = search.get("doc") ?? undefined
+
+  const documents = useSubjectStore((s) => s.documents)
+  const loading = useSubjectStore((s) => s.loading)
+  const error = useSubjectStore((s) => s.error)
+  const selectedId = useSubjectStore((s) => s.selectedDocId || undefined)
+  const setSelectedDoc = useSubjectStore((s) => s.setSelectedDoc)
+
+  // URL -> store selection sync
+  useEffect(() => {
+    if (selectedParam && documents.some((d) => d.id === selectedParam)) {
+      if (selectedId !== selectedParam) setSelectedDoc(selectedParam)
+    } else if (!selectedId && documents.length > 0) {
+      // default to most recent document if none selected
+      setSelectedDoc(documents[0].id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedParam, documents])
+
+  const pollError = null
+
   function onFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files) onSelectFiles(e.target.files)
   }
+
+  const handleSelect = useCallback(
+    (id: string) => {
+      const params = new URLSearchParams(search.toString())
+      params.set("doc", id)
+      params.set("tab", "insights")
+      router.push(`?${params.toString()}`)
+    },
+    [router, search]
+  )
 
   return (
     <div className="space-y-4">
@@ -88,50 +94,23 @@ const DocumentsTab = forwardRef<HTMLInputElement, DocumentsTabProps>(function Do
         </CardContent>
       </Card>
 
-      {docsError && (
+      {(error || pollError) && (
         <Alert variant="destructive">
           <AlertTitle>Could not load documents</AlertTitle>
-          <AlertDescription>{docsError}</AlertDescription>
+          <AlertDescription>
+            {(error ?? pollError) || "An unexpected error occurred."}
+          </AlertDescription>
         </Alert>
       )}
 
-      {docsLoading ? (
-        <div className="grid gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-14 w-full" />
-          ))}
-        </div>
-      ) : docs && docs.length > 0 ? (
-        <div className="grid gap-3">
-          {docs.map((d) => (
-            <div key={d.id} className="flex items-center justify-between rounded-md border p-3">
-              <div className="flex items-center gap-3">
-                <div className="rounded-md border bg-background p-2 text-foreground/80">
-                  <FileText className="h-4 w-4" />
-                </div>
-                <div>
-                  <div className="font-medium leading-none">{d.filename}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {d.createdAt ? new Date(d.createdAt).toLocaleString() : ""}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant={statusVariant(d.status)}>{d.status}</Badge>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <Card className="border-dashed">
-          <CardHeader>
-            <CardTitle>No documents yet</CardTitle>
-            <CardDescription>
-              Upload past exams, lecture notes, and PDFs to power your analysis.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      )}
+      <DocumentsList
+        documents={documents}
+        selectedId={selectedId}
+        onSelect={handleSelect}
+        isLoading={loading}
+        error={error ?? undefined}
+        onRetry={onRetry}
+      />
     </div>
   )
 })

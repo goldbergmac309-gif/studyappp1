@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
@@ -15,11 +16,11 @@ describe('Subjects (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     prisma = moduleFixture.get<PrismaService>(PrismaService);
-    
+
     // Clean database before each test
     await prisma.subject.deleteMany();
     await prisma.user.deleteMany();
-    
+
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -30,6 +31,78 @@ describe('Subjects (e2e)', () => {
     await app.init();
   });
 
+  describe('GET /subjects/:id', () => {
+    it('should return 401 without JWT', async () => {
+      await request(app.getHttpServer()).get('/subjects/some-id').expect(401);
+    });
+
+    it('should return 404 for non-existent subject (owned or not)', async () => {
+      const signupResponse = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'getid_nf@test.com', password: 'password123' })
+        .expect(201);
+      const token = signupResponse.body.accessToken as string;
+
+      await request(app.getHttpServer())
+        .get('/subjects/nonexistent')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+    });
+
+    it("should return 404 for other user's subject (ownership enforced)", async () => {
+      // User A
+      const a = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'getid_a@test.com', password: 'password123' })
+        .expect(201);
+      const tokenA = a.body.accessToken as string;
+
+      // User B
+      const b = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'getid_b@test.com', password: 'password123' })
+        .expect(201);
+      const tokenB = b.body.accessToken as string;
+
+      // A creates subject
+      const created = await request(app.getHttpServer())
+        .post('/subjects')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ name: 'Owned by A' })
+        .expect(201);
+      const subjectId = created.body.id as string;
+
+      // B tries to fetch -> 404
+      await request(app.getHttpServer())
+        .get(`/subjects/${subjectId}`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .expect(404);
+    });
+
+    it('should return 200 and subject for the owner', async () => {
+      const user = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'getid_owner@test.com', password: 'password123' })
+        .expect(201);
+      const token = user.body.accessToken as string;
+
+      const created = await request(app.getHttpServer())
+        .post('/subjects')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'My Subject' })
+        .expect(201);
+      const subjectId = created.body.id as string;
+
+      const res = await request(app.getHttpServer())
+        .get(`/subjects/${subjectId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(res.body.id).toBe(subjectId);
+      expect(res.body.name).toBe('My Subject');
+    });
+  });
+
   afterAll(async () => {
     await prisma.$disconnect();
     await app.close();
@@ -37,9 +110,7 @@ describe('Subjects (e2e)', () => {
 
   describe('Unauthorized Access Tests', () => {
     it('should return 401 for GET /subjects without JWT token', () => {
-      return request(app.getHttpServer())
-        .get('/subjects')
-        .expect(401);
+      return request(app.getHttpServer()).get('/subjects').expect(401);
     });
 
     it('should return 401 for POST /subjects without JWT token', () => {
@@ -123,7 +194,7 @@ describe('Subjects (e2e)', () => {
         .set('Authorization', `Bearer ${tokenA}`)
         .send({ name: 'Subject A' })
         .expect(201);
-      
+
       subjectAId = subjectAResponse.body.id;
       expect(subjectAResponse.body.name).toBe('Subject A');
 
@@ -134,7 +205,9 @@ describe('Subjects (e2e)', () => {
         .expect(200);
 
       expect(userBSubjectsResponse.body).toEqual([]);
-      expect(userBSubjectsResponse.body.find((s: any) => s.name === 'Subject A')).toBeUndefined();
+      expect(
+        userBSubjectsResponse.body.find((s: any) => s.name === 'Subject A'),
+      ).toBeUndefined();
 
       // Step D: Verify User A can see their own subject
       const userASubjectsResponse = await request(app.getHttpServer())
@@ -191,8 +264,9 @@ describe('Subjects (e2e)', () => {
         .expect(200);
 
       expect(allSubjectsResponse.body).toHaveLength(2);
-      
-      const subjectNames = allSubjectsResponse.body.map((s: any) => s.name);
+
+      const list = allSubjectsResponse.body as Array<{ name: string }>;
+      const subjectNames = list.map((s) => s.name);
       expect(subjectNames).toContain('Mathematics');
       expect(subjectNames).toContain('Physics');
 

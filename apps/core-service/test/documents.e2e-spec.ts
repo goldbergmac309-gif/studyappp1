@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
@@ -5,7 +6,15 @@ import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { S3Service } from '../src/s3/s3.service';
 import { QueueService } from '../src/queue/queue.service';
-import { Status } from '@prisma/client';
+import cuid from 'cuid';
+// Local enum mirror for Prisma Status (string union)
+const Status = {
+  UPLOADED: 'UPLOADED',
+  QUEUED: 'QUEUED',
+  PROCESSING: 'PROCESSING',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED',
+} as const;
 
 interface LoginResponse {
   accessToken: string;
@@ -58,6 +67,100 @@ describe('Documents (e2e)', () => {
     await app.init();
   });
 
+  it('GET /subjects/:id/insights requires JWT', async () => {
+    await request(app.getHttpServer())
+      .get('/subjects/any/insights')
+      .expect(401);
+  });
+
+  it('GET /subjects/:id/insights enforces ownership (404 for other user)', async () => {
+    const tokenA = await signup('insights_owner_a@test.com');
+    const tokenB = await signup('insights_owner_b@test.com');
+
+    await createSubject(tokenA, 'Graphics');
+    const subjectB = await createSubject(tokenB, 'Networks');
+
+    // User A tries to access B's subject insights
+    await request(app.getHttpServer())
+      .get(`/subjects/${subjectB}/insights`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .expect(404);
+  });
+
+  it('GET /subjects/:id/insights returns analysis map for COMPLETED docs with analysis only', async () => {
+    const token = await signup('insights_ok@test.com');
+    const subjectId = await createSubject(token, 'Compilers');
+
+    const me = await prisma.user.findFirst({
+      where: { email: 'insights_ok@test.com' },
+    });
+    expect(me).toBeTruthy();
+
+    // COMPLETED with analysis
+    const docWithAnalysis = await prisma.document.create({
+      data: {
+        id: cuid(),
+        filename: 'done.pdf',
+        s3Key: `documents/${me!.id}/done`,
+        status: Status.COMPLETED,
+        subjectId,
+      },
+    });
+    await prisma.analysisResult.create({
+      data: {
+        documentId: docWithAnalysis.id,
+        engineVersion: 'oracle-v1',
+        resultPayload: {
+          keywords: [{ term: 'compiler', score: 0.9 }],
+          metrics: { pages: 3, textLength: 1200 },
+        },
+      },
+    });
+
+    // COMPLETED without analysis should NOT appear
+    const docWithoutAnalysis = await prisma.document.create({
+      data: {
+        id: cuid(),
+        filename: 'missing.pdf',
+        s3Key: `documents/${me!.id}/missing`,
+        status: Status.COMPLETED,
+        subjectId,
+      },
+    });
+
+    // PROCESSING should NOT appear
+    const processingDoc = await prisma.document.create({
+      data: {
+        id: cuid(),
+        filename: 'pending.pdf',
+        s3Key: `documents/${me!.id}/pending`,
+        status: Status.PROCESSING,
+        subjectId,
+      },
+    });
+
+    const res = await request(app.getHttpServer())
+      .get(`/subjects/${subjectId}/insights`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    const body = res.body as Record<
+      string,
+      { id: string; engineVersion: string; resultPayload: unknown }
+    >;
+    expect(typeof body).toBe('object');
+    expect(Object.keys(body)).toContain(docWithAnalysis.id);
+    expect(body[docWithAnalysis.id]).toHaveProperty(
+      'engineVersion',
+      'oracle-v1',
+    );
+    expect(body[docWithAnalysis.id]).toHaveProperty('resultPayload');
+
+    // Ensure others are not included
+    expect(Object.keys(body)).not.toContain(docWithoutAnalysis.id);
+    expect(Object.keys(body)).not.toContain(processingDoc.id);
+  });
+
   afterAll(async () => {
     await prisma.$disconnect();
     await app.close();
@@ -107,7 +210,7 @@ describe('Documents (e2e)', () => {
       .attach('file', makeFileBuffer('PDF_DATA'), 'my-notes.pdf')
       .expect(201);
 
-    const body = uploadRes.body as { id: string; status: Status | string };
+    const body = uploadRes.body as { id: string; status: string };
     expect(body.id).toBeDefined();
     expect(body.status).toBe('QUEUED');
 
@@ -131,7 +234,7 @@ describe('Documents (e2e)', () => {
       throw new Error('RMQ unavailable');
     });
 
-    const res = await request(app.getHttpServer())
+    await request(app.getHttpServer())
       .post(`/subjects/${subjectId}/documents`)
       .set('Authorization', `Bearer ${token}`)
       .attach('file', makeFileBuffer('DATA'), 'notes.pdf')
@@ -169,7 +272,9 @@ describe('Documents (e2e)', () => {
 
   it('GET /subjects/:id/documents requires JWT and enforces ownership', async () => {
     // 401 when missing JWT
-    await request(app.getHttpServer()).get('/subjects/any/documents').expect(401);
+    await request(app.getHttpServer())
+      .get('/subjects/any/documents')
+      .expect(401);
 
     const tokenA = await signup('docs_list_a@test.com');
     const tokenB = await signup('docs_list_b@test.com');
@@ -178,13 +283,18 @@ describe('Documents (e2e)', () => {
     const subjectB = await createSubject(tokenB, 'Systems');
 
     // Seed documents for A and B directly via Prisma
-    const userA = await prisma.user.findFirst({ where: { email: 'docs_list_a@test.com' } });
-    const userB = await prisma.user.findFirst({ where: { email: 'docs_list_b@test.com' } });
+    const userA = await prisma.user.findFirst({
+      where: { email: 'docs_list_a@test.com' },
+    });
+    const userB = await prisma.user.findFirst({
+      where: { email: 'docs_list_b@test.com' },
+    });
     expect(userA).toBeTruthy();
     expect(userB).toBeTruthy();
 
     await prisma.document.create({
       data: {
+        id: cuid(),
         filename: 'a1.pdf',
         s3Key: `documents/${userA!.id}/a1`,
         status: Status.QUEUED,
@@ -193,6 +303,7 @@ describe('Documents (e2e)', () => {
     });
     await prisma.document.create({
       data: {
+        id: cuid(),
         filename: 'a2.pdf',
         s3Key: `documents/${userA!.id}/a2`,
         status: Status.UPLOADED,
@@ -201,6 +312,7 @@ describe('Documents (e2e)', () => {
     });
     await prisma.document.create({
       data: {
+        id: cuid(),
         filename: 'b1.pdf',
         s3Key: `documents/${userB!.id}/b1`,
         status: Status.QUEUED,
@@ -213,7 +325,12 @@ describe('Documents (e2e)', () => {
       .get(`/subjects/${subjectA}/documents`)
       .set('Authorization', `Bearer ${tokenA}`)
       .expect(200);
-    const arrA = listA.body as Array<{ id: string; filename: string; status: string; createdAt: string }>;
+    const arrA = listA.body as Array<{
+      id: string;
+      filename: string;
+      status: string;
+      createdAt: string;
+    }>;
     expect(Array.isArray(arrA)).toBe(true);
     expect(arrA.length).toBe(2);
     expect(arrA[0]).toHaveProperty('id');
@@ -232,12 +349,15 @@ describe('Documents (e2e)', () => {
     const token = await signup('analysis_get@test.com');
     const subjectId = await createSubject(token, 'NLP');
 
-    const me = await prisma.user.findFirst({ where: { email: 'analysis_get@test.com' } });
+    const me = await prisma.user.findFirst({
+      where: { email: 'analysis_get@test.com' },
+    });
     expect(me).toBeTruthy();
 
     // Seed a COMPLETED doc with analysis
     const completedDoc = await prisma.document.create({
       data: {
+        id: cuid(),
         filename: 'done.pdf',
         s3Key: `documents/${me!.id}/done`,
         status: Status.COMPLETED,
@@ -255,6 +375,7 @@ describe('Documents (e2e)', () => {
     // Seed a QUEUED doc without analysis
     const queuedDoc = await prisma.document.create({
       data: {
+        id: cuid(),
         filename: 'pending.pdf',
         s3Key: `documents/${me!.id}/pending`,
         status: Status.QUEUED,

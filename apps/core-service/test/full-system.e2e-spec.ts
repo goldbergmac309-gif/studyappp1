@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
@@ -36,13 +37,7 @@ describe('Full System (God Test) e2e', () => {
     return (res.body as LoginResponse).accessToken;
   };
 
-  const login = async (email: string, password = 'password123') => {
-    const res = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email, password })
-      .expect(200);
-    return (res.body as LoginResponse).accessToken;
-  };
+  // Note: Login helper not needed; using signup to produce tokens for tests
 
   const createSubject = async (token: string, name: string) => {
     const res = await request(app.getHttpServer())
@@ -68,24 +63,23 @@ describe('Full System (God Test) e2e', () => {
       .useValue({
         publishDocumentJob: ({ documentId }: { documentId: string }) => {
           // Simulate the oracle worker posting back after a short delay
-          setTimeout(async () => {
-            try {
-              await request(app.getHttpServer())
-                .put(`/internal/documents/${documentId}/analysis`)
-                .set('X-Internal-API-Key', INTERNAL_KEY)
-                .send({
-                  engineVersion: 'oracle-v1',
-                  resultPayload: {
-                    keywords: [
-                      { term: 'systems', score: 1.0 },
-                      { term: 'algorithms', score: 0.9 },
-                    ],
-                    metrics: { pages: 1, textLength: 12 },
-                  },
-                });
-            } catch (e) {
-              // swallow test-time errors
-            }
+          setTimeout(() => {
+            void request(app.getHttpServer())
+              .put(`/internal/documents/${documentId}/analysis`)
+              .set('X-Internal-API-Key', INTERNAL_KEY)
+              .send({
+                engineVersion: 'oracle-v1',
+                resultPayload: {
+                  keywords: [
+                    { term: 'systems', score: 1.0 },
+                    { term: 'algorithms', score: 0.9 },
+                  ],
+                  metrics: { pages: 1, textLength: 12 },
+                },
+              })
+              .catch(() => {
+                // ignore during tests
+              });
           }, 300);
         },
       })
@@ -101,7 +95,11 @@ describe('Full System (God Test) e2e', () => {
     await prisma.user.deleteMany();
 
     app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
     );
     await app.init();
   });
@@ -126,7 +124,7 @@ describe('Full System (God Test) e2e', () => {
 
     // Bob
     const bobToken = await signup('bob@test.com');
-    const bobSubject = await createSubject(bobToken, 'Subject B');
+    await createSubject(bobToken, 'Subject B');
 
     // Bob cannot list Alice's documents
     await request(app.getHttpServer())

@@ -16,7 +16,10 @@ export class QueueHealthIndicator extends HealthIndicator {
     try {
       const status = await this.queue.checkHealth();
       if (status === null) {
-        return this.getStatus(key, true, { optional: true, reason: 'not configured' });
+        return this.getStatus(key, true, {
+          optional: true,
+          reason: 'not configured',
+        });
       }
       const result = this.getStatus(key, status);
       if (!status) {

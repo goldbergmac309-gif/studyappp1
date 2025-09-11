@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
@@ -93,9 +94,11 @@ describe('Phase 1 - Full User Journey (e2e)', () => {
       .expect(200);
 
     expect(aliceSubjectsAfterCreation.body).toHaveLength(2);
-    
+
     // Verify the names match (order may vary due to createdAt desc ordering)
-    const subjectNames = aliceSubjectsAfterCreation.body.map((subject: any) => subject.name);
+    const subjectNames = aliceSubjectsAfterCreation.body.map(
+      (subject: any) => subject.name,
+    );
     expect(subjectNames).toContain('Advanced Thermodynamics');
     expect(subjectNames).toContain('Quantum Electrodynamics');
 
@@ -143,8 +146,10 @@ describe('Phase 1 - Full User Journey (e2e)', () => {
       .expect(200);
 
     expect(aliceFinalSubjects.body).toHaveLength(2);
-    
-    const finalSubjectNames = aliceFinalSubjects.body.map((subject: any) => subject.name);
+
+    const finalSubjectNames = aliceFinalSubjects.body.map(
+      (subject: any) => subject.name,
+    );
     expect(finalSubjectNames).toContain('Advanced Thermodynamics');
     expect(finalSubjectNames).toContain('Quantum Electrodynamics');
   });

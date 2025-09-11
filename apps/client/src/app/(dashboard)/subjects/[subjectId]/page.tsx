@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { BookText, FileUp, AlertCircle } from "lucide-react"
 
 import api from "@/lib/api"
@@ -22,27 +22,28 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
-import DocumentsTab, { type DocumentItem } from "@/app/(dashboard)/subjects/[subjectId]/_components/documents-tab"
+import DocumentsTab from "@/app/(dashboard)/subjects/[subjectId]/_components/documents-tab"
 import InsightsTab from "@/app/(dashboard)/subjects/[subjectId]/_components/insights-tab"
+import { useDocumentPolling } from "@/lib/hooks/useDocumentPolling"
 
 interface Subject {
   id: string
   name: string
 }
 
-// Using DocStatus from DocumentsTab types; no local alias needed
-
 export default function SubjectWorkspacePage() {
   const { subjectId } = useParams<{ subjectId: string }>()
+  const router = useRouter()
+  const search = useSearchParams()
   const [subject, setSubject] = useState<Subject | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [docs, setDocs] = useState<DocumentItem[] | null>(null)
-  const [docsLoading, setDocsLoading] = useState(true)
-  const [docsError, setDocsError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Own the unified polling lifecycle for this subject
+  const { start, stop } = useDocumentPolling(subjectId, { autoStart: false })
 
   const title = useMemo(() => subject?.name ?? "Subject", [subject])
 
@@ -62,42 +63,16 @@ export default function SubjectWorkspacePage() {
     fetchSubject()
   }, [subjectId])
 
-  const fetchDocuments = useCallback(async () => {
-    try {
-      setDocsError(null)
-      setDocsLoading(true)
-      const res = await api.get<DocumentItem[]>(`/subjects/${subjectId}/documents`)
-      setDocs((prev) => {
-        const prevList = prev ?? []
-        const temp = prevList.filter((d) => d.id.startsWith("temp-"))
-        if (temp.length === 0) return res.data
-        // Drop temp entries that the server already returned (by filename match)
-        const serverNames = new Set(res.data.map((d) => d.filename))
-        const remainingTemp = temp.filter((t) => !serverNames.has(t.filename))
-        return [...remainingTemp, ...res.data]
-      })
-    } catch (e: unknown) {
-      const message = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : "Failed to load documents"
-      setDocsError(String(message))
-    } finally {
-      setDocsLoading(false)
+  // Start polling after subject is fetched (not loading)
+  useEffect(() => {
+    if (!loading && subjectId) {
+      start()
     }
-  }, [subjectId])
-
-  useEffect(() => {
-    fetchDocuments()
-  }, [fetchDocuments])
-
-  // Polling: while there are documents and any is not COMPLETED, refresh list every 2s
-  useEffect(() => {
-    if (!docs || docs.length === 0) return
-    const hasPending = docs.some((d) => d.status !== "COMPLETED")
-    if (!hasPending) return
-    const id = setInterval(() => {
-      fetchDocuments()
-    }, 2000)
-    return () => clearInterval(id)
-  }, [docs, subjectId, fetchDocuments])
+    return () => {
+      stop()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, subjectId])
 
   const onDrop = useCallback(
     async (files: FileList | File[]) => {
@@ -106,14 +81,6 @@ export default function SubjectWorkspacePage() {
       try {
         setUploading(true)
         setUploadProgress(0)
-        // Ensure list is visible
-        setDocsLoading(false)
-        // Optimistic UI: show the file immediately
-        const tempId = `temp-${Date.now()}`
-        setDocs((prev) => [
-          { id: tempId, filename: file.name, status: "UPLOADED", createdAt: new Date().toISOString() },
-          ...((prev ?? [])),
-        ])
         const form = new FormData()
         form.append("file", file)
         await api.post(`/subjects/${subjectId}/documents`, form, {
@@ -124,18 +91,15 @@ export default function SubjectWorkspacePage() {
           },
         })
         toast.success("Upload queued", { description: file.name })
-        await fetchDocuments()
       } catch (e: unknown) {
         const message = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : "Upload failed"
         toast.error("Upload failed", { description: String(message) })
-        // Remove optimistic row on failure
-        setDocs((prev) => (prev ? prev.filter((d) => !d.id.startsWith("temp-")) : prev))
       } finally {
         setUploading(false)
         setUploadProgress(0)
       }
     },
-    [subjectId, fetchDocuments]
+    [subjectId]
   )
 
   return (
@@ -187,7 +151,15 @@ export default function SubjectWorkspacePage() {
           <Skeleton className="h-48 w-full" />
         </div>
       ) : (
-        <Tabs defaultValue="overview" className="w-full">
+        <Tabs
+          value={search.get("tab") ?? "overview"}
+          onValueChange={(v) => {
+            const params = new URLSearchParams(search.toString())
+            params.set("tab", v)
+            router.push(`?${params.toString()}`)
+          }}
+          className="w-full"
+        >
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -206,12 +178,10 @@ export default function SubjectWorkspacePage() {
           </TabsContent>
           <TabsContent value="documents" className="space-y-4">
             <DocumentsTab
-              docs={docs}
-              docsLoading={docsLoading}
-              docsError={docsError}
               uploading={uploading}
               uploadProgress={uploadProgress}
               onSelectFiles={(files) => onDrop(files)}
+              onRetry={() => start()}
               ref={fileInputRef}
             />
           </TabsContent>

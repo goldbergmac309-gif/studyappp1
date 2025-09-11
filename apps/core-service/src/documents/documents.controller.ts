@@ -63,3 +63,18 @@ export class DocumentsQueryController {
     return this.documentsService.getAnalysis(userId, documentId);
   }
 }
+
+@UseGuards(JwtAuthGuard)
+@Controller('subjects/:subjectId/insights')
+export class SubjectInsightsController {
+  constructor(private readonly documentsService: DocumentsService) {}
+
+  @Get()
+  async listInsights(
+    @Req() req: RequestWithUser,
+    @Param('subjectId') subjectId: string,
+  ) {
+    const userId = req.user.id;
+    return this.documentsService.listSubjectInsights(userId, subjectId);
+  }
+}

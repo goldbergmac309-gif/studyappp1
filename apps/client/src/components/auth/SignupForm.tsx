@@ -27,8 +27,8 @@ import { isAxiosError } from "axios"
 const schema = z
   .object({
     email: z.string().email("Enter a valid email"),
-    password: z.string().min(6, "Password must be at least 6 characters"),
-    confirmPassword: z.string().min(6, "Confirm your password"),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string().min(8, "Confirm your password"),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
@@ -70,9 +70,23 @@ export function SignupForm() {
       const next = search?.get("next")
       router.replace(next && next.startsWith("/") ? next : "/dashboard")
     } catch (e: unknown) {
-      const message = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : "Signup failed"
-      setError(String(message))
-      toast.error("Signup failed", { description: String(message) })
+      let message = "Signup failed"
+      if (isAxiosError(e)) {
+        const data: unknown = e.response?.data
+        if (typeof data === "string" && data.trim().length > 0) {
+          message = data
+        } else if (data && typeof data === "object" && "message" in data && typeof (data as { message: unknown }).message === "string") {
+          message = String((data as { message: string }).message)
+        } else if (e.message) {
+          message = e.message
+        } else {
+          message = "Network error"
+        }
+      } else if (e instanceof Error) {
+        message = e.message
+      }
+      setError(message)
+      toast.error("Signup failed", { description: message })
     }
   }
 

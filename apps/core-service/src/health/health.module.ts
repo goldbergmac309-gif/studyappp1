@@ -12,6 +12,11 @@ import { LivenessHealthIndicator } from './indicators/liveness.indicator';
 @Module({
   imports: [TerminusModule, PrismaModule, QueueModule, S3Module],
   controllers: [HealthController],
-  providers: [PrismaHealthIndicator, QueueHealthIndicator, S3HealthIndicator, LivenessHealthIndicator],
+  providers: [
+    PrismaHealthIndicator,
+    QueueHealthIndicator,
+    S3HealthIndicator,
+    LivenessHealthIndicator,
+  ],
 })
 export class HealthModule {}

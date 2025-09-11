@@ -25,4 +25,10 @@ export class SubjectsService {
       },
     });
   }
+
+  async findOneForUser(id: string, userId: string) {
+    return this.prisma.subject.findFirst({
+      where: { id, userId },
+    });
+  }
 }

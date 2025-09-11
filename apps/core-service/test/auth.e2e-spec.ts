@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
@@ -45,9 +46,13 @@ describe('Auth Flow (e2e)', () => {
       })
       .expect(201)
       .then((res) => {
-        expect(res.body).toHaveProperty('accessToken');
-        expect(res.body).toHaveProperty('user');
-        expect(res.body.user.email).toBe(uniqueEmail);
+        const body = res.body as unknown as {
+          accessToken: string;
+          user: { email: string };
+        };
+        expect(body).toHaveProperty('accessToken');
+        expect(body).toHaveProperty('user');
+        expect(body.user.email).toBe(uniqueEmail);
       });
   });
 
@@ -60,7 +65,8 @@ describe('Auth Flow (e2e)', () => {
       })
       .expect(200)
       .then((res) => {
-        expect(res.body).toHaveProperty('accessToken');
+        const body = res.body as unknown as { accessToken: string };
+        expect(body).toHaveProperty('accessToken');
       });
   });
 

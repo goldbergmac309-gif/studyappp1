@@ -12,7 +12,10 @@ export class S3HealthIndicator extends HealthIndicator {
     try {
       const ok = await this.s3.checkHealth();
       if (ok === null) {
-        return this.getStatus(key, true, { optional: true, reason: 'not configured' });
+        return this.getStatus(key, true, {
+          optional: true,
+          reason: 'not configured',
+        });
       }
       return this.getStatus(key, ok);
     } catch (e) {

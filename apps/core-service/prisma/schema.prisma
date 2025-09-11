@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../../../node_modules/.prisma/client"
+  // output disabled to use Prisma's default location compatible with pnpm
 }
 
 datasource db {
@@ -27,4 +27,41 @@ model Subject {
   // Relation to User (owner)
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Back-relation
+  documents  Document[]
+}
+
+// Document processing status enum
+enum Status {
+  UPLOADED
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model Document {
+  id        String   @id
+  filename  String
+  s3Key     String
+  status    Status   @default(UPLOADED)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  analysisResult AnalysisResult?
+}
+
+model AnalysisResult {
+  id            String   @id @default(cuid())
+  engineVersion String
+  resultPayload Json
+  createdAt     DateTime @default(now())
+
+  // Relations
+  documentId String @unique
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 }

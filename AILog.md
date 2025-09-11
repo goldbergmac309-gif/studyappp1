@@ -104,3 +104,38 @@ Documented by Cascade following canonical architecture and constraints defined i
 
 ---
 Documented by Cascade (Forge) following canonical architecture and constraints defined in `BLUEPRINT.md`, `DOCTRINE.md`, and `PROJECT_OVERVIEW.md`. This entry marks the conclusion of the Production Readiness Sprint for the Synapse OS MVP.
+
+## 2025-09-11 — MVP COMPLETE — Status: COMPLETE
+
+### Executive Summary
+- The Synapse OS MVP is complete. The monorepo builds cleanly with zero critical linting errors. All core-service E2E test suites pass (7/7). Client build is green with Next.js requirements satisfied (Suspense wrappers around auth pages using `useSearchParams`).
+- Health readiness semantics hardened: dependency failures are normalized to HTTP 503 (Service Unavailable), yielding predictable health behavior in degraded modes.
+- The asynchronous intelligence pipeline (Upload → S3 → Queue → Oracle analysis callback → Persisted AnalysisResult) is verified end-to-end and stable for local development.
+
+### Final System State
+- Core Service (NestJS + Prisma + SQLite for dev)
+  - Auth endpoints: `POST /auth/signup`, `POST /auth/login` return `LoginResponse` per contract.
+  - Subjects endpoints: owner-scoped CRUD (Sprint 1 focus: create/list/get by id with ownership enforcement).
+  - Documents pipeline: `POST /subjects/:subjectId/documents` (Multer memory storage) → S3 upload via `S3Service` → queue publish via `QueueService` → eventual `PUT /internal/documents/:id/analysis` (guarded by `X-Internal-API-Key`).
+  - Health: `GET /health/live` and `GET /health/ready` with indicators (DB mandatory; Queue/S3 optional but surfaced; failures yield 503 on readiness).
+  - Prisma schema includes `User`, `Subject`, `Document` (Status enum), and `AnalysisResult` with relations; migrations applied to local SQLite dev DB.
+
+- Oracle Service (Python + Celery)
+  - Consumes `document_processing_jobs` via AMQP bridge, downloads artifacts from S3/MinIO, performs analysis, and posts results back to core-service.
+
+- Client (Next.js)
+  - Auth pages (login/signup) compliant with Next.js suspense requirements.
+  - Subject workspace scaffold with Documents and Insights tabs; API client supports listing documents and fetching analysis results.
+
+### Quality Gates & Evidence
+- Lint: ESLint clean for both client and core-service (tests use minimal, targeted disables where applicable).
+- Typecheck: TypeScript passes across workspace.
+- Tests: Core-service E2E suites all green; readiness e2e asserts both healthy (200) and degraded (503) states.
+- Build: Next.js production build completes; NestJS build completes.
+
+### Release
+- Tag: `v1.0.0-MVP` — "v1.0.0-MVP: Synapse OS - Core Insight Engine. Full stack is feature-complete, hardened, and verified."
+- Notes: This tag marks the functional and architectural completeness of the MVP across backend, frontend, and worker components per `BLUEPRINT.md` and `DOCTRINE.md`.
+
+---
+Documented by Cascade (Forge). This entry marks the finalization of the Synapse OS MVP and the successful conclusion of the Final Hardening Sprint.

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import {
   DocumentsController,
   DocumentsQueryController,
+  SubjectInsightsController,
 } from './documents.controller';
 import { DocumentsService } from './documents.service';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -10,7 +11,11 @@ import { QueueModule } from '../queue/queue.module';
 
 @Module({
   imports: [PrismaModule, S3Module, QueueModule],
-  controllers: [DocumentsController, DocumentsQueryController],
+  controllers: [
+    DocumentsController,
+    DocumentsQueryController,
+    SubjectInsightsController,
+  ],
   providers: [DocumentsService],
 })
 export class DocumentsModule {}

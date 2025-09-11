@@ -111,4 +111,35 @@ export class DocumentsService {
       resultPayload: doc.analysisResult.resultPayload as unknown,
     };
   }
+
+  async listSubjectInsights(userId: string, subjectId: string) {
+    // Ensure subject belongs to user
+    const subject = await this.prisma.subject.findFirst({
+      where: { id: subjectId, userId },
+      select: { id: true },
+    });
+    if (!subject) {
+      throw new NotFoundException('Subject not found');
+    }
+
+    const docs = await this.prisma.document.findMany({
+      where: { subjectId, status: 'COMPLETED' },
+      include: { analysisResult: true },
+    });
+
+    const out: Record<
+      string,
+      { id: string; engineVersion: string; resultPayload: unknown }
+    > = {};
+    for (const d of docs) {
+      if (d.analysisResult) {
+        out[d.id] = {
+          id: d.analysisResult.id,
+          engineVersion: d.analysisResult.engineVersion,
+          resultPayload: d.analysisResult.resultPayload as unknown,
+        };
+      }
+    }
+    return out;
+  }
 }

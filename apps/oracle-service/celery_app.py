@@ -59,7 +59,7 @@ class RawQueueBridge(bootsteps.ConsumerStep):
                 channel,
                 queues=[self.queue],
                 callbacks=[self.on_message],
-                accept=["*"],  # accept any content-type; we'll parse JSON manually
+                accept=["json"],  # accept JSON messages published by core-service
             )
         ]
 
