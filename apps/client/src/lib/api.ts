@@ -9,7 +9,12 @@ import type {
   CreateSubjectPayload,
   UpdateSubjectPayload,
 } from "@/lib/types"
-import type { SubjectInsights } from "@studyapp/shared-types"
+import type {
+  SubjectInsights,
+  PersonaListItem,
+  WidgetInstanceDto,
+  UpdateWorkspaceLayoutDto,
+} from "@studyapp/shared-types"
 
 // Create a singleton Axios instance configured for the client app.
 const api = axios.create({
@@ -38,6 +43,83 @@ api.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+// Workspace API (Epoch III)
+
+export async function listPersonas(options: { signal?: AbortSignal } = {}): Promise<PersonaListItem[]> {
+  try {
+    const res = await api.get<PersonaListItem[]>(`/workspace/personas`, { signal: options.signal })
+    return Array.isArray(res.data) ? res.data : []
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function applyPersona(
+  subjectId: string,
+  personaId: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<WidgetInstanceDto[]> {
+  try {
+    const res = await api.post<WidgetInstanceDto[]>(
+      `/subjects/${encodeURIComponent(subjectId)}/apply-persona`,
+      { personaId },
+      { signal: options.signal },
+    )
+    return Array.isArray(res.data) ? res.data : []
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function getSubjectWorkspace(
+  subjectId: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<WidgetInstanceDto[]> {
+  try {
+    const res = await api.get<WidgetInstanceDto[]>(
+      `/subjects/${encodeURIComponent(subjectId)}/workspace`,
+      { signal: options.signal },
+    )
+    return Array.isArray(res.data) ? res.data : []
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if (err.response?.status === 404) return []
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function patchWorkspaceLayout(
+  subjectId: string,
+  payload: UpdateWorkspaceLayoutDto,
+  options: { signal?: AbortSignal } = {}
+): Promise<WidgetInstanceDto[]> {
+  try {
+    const res = await api.patch<WidgetInstanceDto[]>(
+      `/subjects/${encodeURIComponent(subjectId)}/workspace/layout`,
+      payload,
+      { signal: options.signal },
+    )
+    return Array.isArray(res.data) ? res.data : []
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
 
 // API: GET /subjects/:subjectId/insights (bulk analysis for a subject)
 // Returns {} on 404; throws on other failures. This is used by the unified polling final step.

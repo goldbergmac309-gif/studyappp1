@@ -1,24 +1,20 @@
-# PROJECT OVERVIEW & NARRATIVE v3.0 - Synapse OS
+# PROJECT OVERVIEW & NARRATIVE v4.0 - Synapse OS
 
 ## 1. Our Mission (Your "Why")
-
-(This section remains our timeless North Star.)
-...
+(Unchanged)
 
 ## 2. Our Design Philosophy: "Calm, Focused, Fluid"
+(Unchanged)
 
-(This section remains our visual and experiential guide.)
-...
+## 3. Our Evolved Phased Plan: Entering Epoch III
 
-## 3. Our Evolved Phased Plan: Entering Epoch II
+We have successfully completed Epoch II, building a world-class Simulation & Prophecy Engine. Our system can now provide Alex with genuine, data-driven foresight. Now, we will transcend the role of a "study tool" and become Alex's indispensable partner in thinking, creating, and connecting ideas.
 
-We have successfully completed Epoch I, building a stable, secure foundation for Insight. We now officially begin **Epoch II: The Age of Simulation & Prophecy.**
+We now officially begin **Epoch III: The Age of Synthesis & Creation.**
 
-*   **The Overarching Goal:** To transform Synapse OS from a passive analysis tool into an **active foresight engine.** We will evolve from answering "What *was* important?" to answering "What *will be* important, and how can I prepare for it?" This is where we build our most powerful and defensible features.
+*   **The Overarching Goal:** To transform Synapse OS from a preparatory tool into the student's daily **"second brain."** This is where Alex will do their most creative and synthetic work. We are building the features that will create profound, daily user engagement and lock-in.
 
-*   **Your Immediate Focus (The Sprints of Epoch II):**
-    1.  **The Command Center Upgrade (Subject Management 2.0):** We will first perfect the user's core workspace. We will build a sophisticated, intelligent "Subject Genesis" modal for creating subjects and provide the full suite of management tools (Rename, Archive, Settings). This upgrade is not just a feature; it provides the rich metadata our AI needs to get smarter.
-    2.  **The Oracle's Heartbeat (The V2 Intelligence Engine):** We will perform a "heart transplant" on our AI. We are moving from simple keyword analysis to deep conceptual understanding. This involves upgrading our database to use PostgreSQL with `pgvector` and building the V2 worker that can deconstruct documents into semantic "chunks" and store them as searchable vector embeddings.
-    3.  **The Oracle's Voice (The Simulation Engine):** This is the culmination of the epoch. We will build the user-facing "Prophetic Exam Generator." Using a full Retrieval-Augmented Generation (RAG) pipeline, the system will leverage our new semantic search capability to create hyper-realistic, professor-styled mock exams from the user's own content.
-
-This epoch is about delivering on our ultimate promise: to give Alex an unfair advantage not just in studying, but in predicting and preparing for their future.
+*   **Your Immediate Focus (The Sprints of Epoch III):**
+    1.  **The Zeitgeist Canvas & Persona System:** We will build the architectural backbone of the fully customizable, widget-based dashboard. This includes the database models for storing layouts and the "Persona" system for one-click workspace setup.
+    2.  **The Core Creative Suite:** We will build the high-quality, essential widgets for daily work: a world-class notes editor, a concept-mapping tool, and an integrated flashcard system powered by our analysis engine.
+    3.  **The AI Nexus (The Ambient Co-pilot):** We will build the final, unified AI interface—the slide-out panel with its Chat, Co-Pilot, and Whiteboard modes. This will make our AI a constant, ambient partner in Alex's workflow.

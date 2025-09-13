@@ -139,3 +139,65 @@ Documented by Cascade (Forge) following canonical architecture and constraints d
 
 ---
 Documented by Cascade (Forge). This entry marks the finalization of the Synapse OS MVP and the successful conclusion of the Final Hardening Sprint.
+
+## 2025-09-13 — Epoch III: Zeitgeist Canvas & Persona System — Status: COMPLETE
+
+### Executive Summary
+- Delivered the foundational creative workspace: the Zeitgeist Canvas and the Persona System.
+- Database evolved to support flexible, per-subject widget layouts and user blueprints.
+- New Workspace API implemented and fully covered by E2E tests (authz, ownership, validation).
+- Client app now features a two-step “Subject Genesis” modal with Persona selection and a draggable/resizable Canvas powered by react-grid-layout.
+
+### Database Evolution (Prisma)
+- Models added:
+  - `Persona { id, name (unique), widgets Json }`
+  - `Blueprint { id, userId -> User onDelete: Cascade, name, layout Json, @@unique([userId, name]) }`
+  - `WidgetInstance { id, subjectId -> Subject onDelete: Cascade, type WidgetType, position Json, size Json, content Json, @@index([subjectId]) }`
+- Enum added: `WidgetType { NOTES, MIND_MAP, FLASHCARDS }`
+- `Subject` extended with: `blueprintId?`, `activeLayout -> Blueprint`, `widgets: WidgetInstance[]`
+- Relation names added to satisfy Prisma validation: `UserBlueprints`, `SubjectActiveLayout`.
+- Migration: `20250913191615_epoch3_workspace` applied successfully to Postgres.
+
+### Seed Data
+- Added `apps/core-service/prisma/seed.ts` (Prisma seed hook) to upsert initial Personas:
+  - STEM Lab (NOTES + MIND_MAP + FLASHCARDS)
+  - Humanities Hub (NOTES + FLASHCARDS)
+  - Exam Crunch (FLASHCARDS + NOTES)
+  - Research Garden (MIND_MAP + NOTES)
+- Persona widgets adhere to canonical schema: `{ type, position: {x,y}, size: {width,height}, content }`.
+
+### Workspace API (core-service)
+- Endpoints per BLUEPRINT v7.0:
+  - `GET /workspace/personas` → [{ id, name }]
+  - `POST /subjects/:id/apply-persona` (JWT, body: `{ personaId }`) → creates Blueprint + WidgetInstances; 409 on re-apply.
+  - `GET /subjects/:id/workspace` (JWT) → returns `WidgetInstanceDto[]` for owner; 404 otherwise.
+  - `PATCH /subjects/:id/workspace/layout` (JWT, body: `UpdateWorkspaceLayoutDto`) → bulk updates positions/sizes; syncs `Subject.activeLayout.layout`.
+- Ownership enforced consistently (`subject.userId` + `archivedAt: null`).
+- Transactional integrity via `Prisma.$transaction` for apply-persona and layout updates.
+- E2E tests: `apps/core-service/test/workspace.e2e-spec.ts` PASS; verifies auth, ownership, re-apply 409, layout sync to Blueprint.
+
+### Shared Types (packages/shared-types)
+- Added `WidgetPosition`, `WidgetSize`, `WidgetContent`, `WidgetType`, `WidgetInstanceDto`, `UpdateWorkspaceLayoutDto`, `PersonaListItem`.
+
+### Client (Next.js) — Canvas & Persona Flow
+- API integration (`apps/client/src/lib/api.ts`): added `listPersonas`, `applyPersona`, `getSubjectWorkspace`, `patchWorkspaceLayout`.
+- Subject Genesis Modal (`dashboard/_components/subject-genesis-modal.tsx`):
+  - Step 2 includes Persona selection (fetched from API).
+  - On create, applies Persona and navigates user to `/subjects/[subjectId]/canvas`.
+- Canvas Page (`subjects/[subjectId]/canvas/page.tsx`):
+  - Renders widget grid via `react-grid-layout` (dynamic import to avoid SSR issues).
+  - Displays placeholders: `NotesWidget`, `MindMapWidget` inside a generic `WidgetWrapper`.
+  - Drag/resize persists layout with `PATCH /subjects/:id/workspace/layout`; state reflects server updates.
+- Typecheck: `pnpm --filter @studyapp/client typecheck` → PASS.
+
+### Evidence (Selected)
+- Migration output confirms DB sync and Prisma Client generation.
+- Seed run output indicates Personas initialized.
+- E2E: `workspace.e2e-spec.ts` shows all tests passed; verified ownership and layout sync.
+- Manual verification: Persona-selected subject creation auto-populates Canvas; drag + refresh persists widget positions.
+
+### Release Tag
+- Created annotated tag `v0.3.0-alpha` — "v0.3.0-alpha: Epoch III Complete - Zeitgeist Canvas & Creative Suite v1."
+
+---
+Documented by Cascade (Forge). This entry marks the successful completion of Epoch III and the transformation of Synapse OS into an interactive creative workspace aligned with BLUEPRINT v7.0.
