@@ -9,6 +9,10 @@ import { StatusBadge } from "@/components/status-badge"
 import { useSubjectStore } from "@/lib/subject-store"
 import TopicHeatMap from "./topic-heat-map"
 import DocumentMetrics from "./document-metrics"
+import { useAnalysisPolling } from "@/lib/hooks/useAnalysisPolling"
+import { Button } from "@/components/ui/button"
+import { useDebouncedBool } from "@/lib/hooks/useDebouncedBool"
+import { useRelativeTime } from "@/lib/hooks/useRelativeTime"
 
 export default function InsightsTab() {
   const router = useRouter()
@@ -21,6 +25,7 @@ export default function InsightsTab() {
   const statusSummary = useSubjectStore((s) => s.statusSummary)
   const selectedDocId = useSubjectStore((s) => s.selectedDocId)
   const setSelectedDoc = useSubjectStore((s) => s.setSelectedDoc)
+  const mergeInsight = useSubjectStore((s) => s.mergeInsight)
 
   // URL -> store selection sync
   React.useEffect(() => {
@@ -36,6 +41,24 @@ export default function InsightsTab() {
     [documents, selectedDocId]
   )
 
+  // Progressive analysis polling for the selected document
+  const hasEntry = React.useMemo(() => !!(selectedDocId && insights[selectedDocId]), [insights, selectedDocId])
+  const shouldPoll = !!selectedDocId && !hasEntry && selectedDoc?.status !== "FAILED"
+  const { analysis, error: pollError, start: startAnalysis, stop: stopAnalysis, retry: retryAnalysis, lastUpdatedAt } = useAnalysisPolling(selectedDocId ?? undefined, {
+    autoStart: false,
+    enabled: shouldPoll,
+  })
+  React.useEffect(() => {
+    if (shouldPoll) startAnalysis()
+    else stopAnalysis()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldPoll])
+  React.useEffect(() => {
+    if (analysis && selectedDocId) {
+      mergeInsight(selectedDocId, analysis)
+    }
+  }, [analysis, selectedDocId, mergeInsight])
+
   const onSelectChange = React.useCallback(
     (id: string) => {
       const params = new URLSearchParams(search.toString())
@@ -46,38 +69,14 @@ export default function InsightsTab() {
     [router, search, setSelectedDoc]
   )
 
-  // Loading/error states
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Insights</CardTitle>
-            <CardDescription>Loading analysis…</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-6 w-56" />
-            <Skeleton className="mt-4 h-32 w-full" />
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  const loadingDebounced = useDebouncedBool(loading, 250)
 
-  if (error) {
-    return (
-      <div className="space-y-4">
-        <Alert variant="destructive">
-          <AlertTitle>Could not load insights</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      </div>
-    )
-  }
+  const pollLastUpdatedText = useRelativeTime(lastUpdatedAt)
 
   if (!documents.length) {
     return (
       <div className="space-y-4">
+        {/* Header space kept consistent even when no docs */}
         <Card className="border-dashed">
           <CardHeader>
             <CardTitle>No insights yet</CardTitle>
@@ -105,7 +104,7 @@ export default function InsightsTab() {
     )
   }
 
-  // Header with selection and status
+  // Header with selection, status and last-updated indicator
   const header = (
     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
       <div>
@@ -115,7 +114,8 @@ export default function InsightsTab() {
           <StatusBadge status={selectedDoc.status} />
         </div>
       </div>
-      <div>
+      <div className="flex items-center gap-3">
+        <div className="text-xs text-muted-foreground">Last updated: {pollLastUpdatedText}</div>
         <label className="sr-only" htmlFor="doc-select">Select document</label>
         <select
           id="doc-select"
@@ -133,8 +133,10 @@ export default function InsightsTab() {
     </div>
   )
 
-  // Intelligent empty states based on status summary
-  if (!statusSummary.allTerminal) {
+  // Progressive rendering: if not all terminal and no entry yet, show skeleton; otherwise, render insights below
+
+  const entry = insights[selectedDocId!]
+  if (!statusSummary.allTerminal && !entry) {
     return (
       <div className="space-y-4">
         {header}
@@ -146,17 +148,31 @@ export default function InsightsTab() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Skeleton className="h-5 w-56" />
-            <Skeleton className="mt-4 h-24 w-full" />
-            <Skeleton className="mt-4 h-40 w-full" />
+            {loadingDebounced ? (
+              <>
+                <Skeleton className="h-5 w-56" />
+                <Skeleton className="mt-4 h-24 w-full" />
+                <Skeleton className="mt-4 h-40 w-full" />
+              </>
+            ) : (
+              <div className="text-sm text-muted-foreground">Preparing your insights…</div>
+            )}
           </CardContent>
         </Card>
+        {(error || pollError) && (
+          <Alert variant="destructive">
+            <AlertTitle>{error ? "Could not load insights" : "Analysis polling error"}</AlertTitle>
+            <AlertDescription className="flex items-center justify-between gap-3">
+              <span>{error ?? pollError}</span>
+              <Button size="sm" variant="outline" onClick={() => retryAnalysis()}>Retry</Button>
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
     )
   }
 
-  // All terminal: show insights if available for selected doc; handle failures gracefully
-  const entry = insights[selectedDocId!]
+  // If still no entry but all terminal or selected failed, show the appropriate empty/failed state
   if (!entry) {
     const isFailed = selectedDoc.status === "FAILED"
     return (
@@ -172,6 +188,15 @@ export default function InsightsTab() {
             </CardDescription>
           </CardHeader>
         </Card>
+        {(error || pollError) && (
+          <Alert variant="destructive">
+            <AlertTitle>{error ? "Could not load insights" : "Analysis polling error"}</AlertTitle>
+            <AlertDescription className="flex items-center justify-between gap-3">
+              <span>{error ?? pollError}</span>
+              <Button size="sm" variant="outline" onClick={() => retryAnalysis()}>Retry</Button>
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
     )
   }

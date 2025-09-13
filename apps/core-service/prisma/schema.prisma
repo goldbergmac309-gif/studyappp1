@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -23,6 +23,13 @@ model Subject {
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Metadata (Epoch II)
+  courseCode    String?
+  professorName String?
+  ambition      String?
+  color         String?
+  archivedAt    DateTime?
 
   // Relation to User (owner)
   userId String

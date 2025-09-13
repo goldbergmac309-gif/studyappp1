@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { QueueService } from '../queue/queue.service';
@@ -141,5 +145,44 @@ export class DocumentsService {
       }
     }
     return out;
+  }
+
+  async reprocess(userId: string, subjectId: string, documentId: string) {
+    // Ensure subject belongs to user
+    const subject = await this.prisma.subject.findFirst({
+      where: { id: subjectId, userId },
+      select: { id: true },
+    });
+    if (!subject) {
+      throw new NotFoundException('Subject not found');
+    }
+
+    const doc = await this.prisma.document.findFirst({
+      where: { id: documentId, subjectId },
+    });
+    if (!doc) {
+      throw new NotFoundException('Document not found');
+    }
+
+    // Only allow reprocess for terminal states
+    if (
+      doc.status === 'QUEUED' ||
+      doc.status === 'PROCESSING' ||
+      doc.status === 'UPLOADED'
+    ) {
+      throw new ConflictException('Document is not in a reprocessable state');
+    }
+
+    // Publish job and set status to QUEUED
+    this.queue.publishDocumentJob({
+      documentId: doc.id,
+      s3Key: doc.s3Key,
+      userId,
+    });
+    await this.prisma.document.update({
+      where: { id: doc.id },
+      data: { status: 'QUEUED' },
+    });
+    return { id: doc.id, status: 'QUEUED' as const };
   }
 }

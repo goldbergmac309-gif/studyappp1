@@ -1,25 +1,24 @@
-# PROJECT OVERVIEW & NARRATIVE - Synapse OS
+# PROJECT OVERVIEW & NARRATIVE v3.0 - Synapse OS
 
 ## 1. Our Mission (Your "Why")
 
-You are part of a team building **Synapse OS**, an elite academic ecosystem for a university student named "Alex."
+(This section remains our timeless North Star.)
+...
 
-Alex is brilliant but overwhelmed. They are drowning in lectures, textbooks, and notes. Their greatest anxieties are **wasted time** and **crippling uncertainty** about what to focus on. We are not building just another "study app." We are building a **Cognitive Co-pilot**. Our mission is to give Alex an unfair advantage by bringing order, intelligence, and confidence to their academic life.
+## 2. Our Design Philosophy: "Calm, Focused, Fluid"
 
-Every feature you build, every line of code you write, must be in service of making Alex more focused, more efficient, and more confident.
+(This section remains our visual and experiential guide.)
+...
 
-## 2. Our Phased Plan of Attack
+## 3. Our Evolved Phased Plan: Entering Epoch II
 
-We will build Synapse OS in logical phases. Each phase is a major leap in capability.
+We have successfully completed Epoch I, building a stable, secure foundation for Insight. We now officially begin **Epoch II: The Age of Simulation & Prophecy.**
 
-### **Phase 1: The Bedrock & The Insight Engine (OUR CURRENT, IMMEDIATE FOCUS)**
+*   **The Overarching Goal:** To transform Synapse OS from a passive analysis tool into an **active foresight engine.** We will evolve from answering "What *was* important?" to answering "What *will be* important, and how can I prepare for it?" This is where we build our most powerful and defensible features.
 
-*   **The Goal:** To solve Alex's most urgent problem: "What do I need to study for my exam?"
-*   **The User Journey:** Alex will sign up, create a "Subject," and upload their past exams and lecture notes.
-*   **The "Aha!" Moment We Are Building:** Our system will analyze these documents and present Alex with a **"Topic Heat Map"**—a clear, data-driven visualization of the most important topics.
-*   **Your Immediate Focus:** Everything we do in Sprint 1 (`The Identity Core`) is the foundational first step toward enabling this journey. Without a secure user account, nothing else is possible.
+*   **Your Immediate Focus (The Sprints of Epoch II):**
+    1.  **The Command Center Upgrade (Subject Management 2.0):** We will first perfect the user's core workspace. We will build a sophisticated, intelligent "Subject Genesis" modal for creating subjects and provide the full suite of management tools (Rename, Archive, Settings). This upgrade is not just a feature; it provides the rich metadata our AI needs to get smarter.
+    2.  **The Oracle's Heartbeat (The V2 Intelligence Engine):** We will perform a "heart transplant" on our AI. We are moving from simple keyword analysis to deep conceptual understanding. This involves upgrading our database to use PostgreSQL with `pgvector` and building the V2 worker that can deconstruct documents into semantic "chunks" and store them as searchable vector embeddings.
+    3.  **The Oracle's Voice (The Simulation Engine):** This is the culmination of the epoch. We will build the user-facing "Prophetic Exam Generator." Using a full Retrieval-Augmented Generation (RAG) pipeline, the system will leverage our new semantic search capability to create hyper-realistic, professor-styled mock exams from the user's own content.
 
-### 3. Guiding Principles
-
-*   **Reality Over Illusion:** We will never fake our work. A feature must be real, functional, and robust. This project operates with the full knowledge of past AI failures where "stub code" and "mock implementations" created a fraudulent product. We will not repeat this.
-*   **User-Centric, Architect-Driven:** The final experience is for Alex. The path to building that experience is through the strict architectural discipline defined by the Human Architect and laid out in the `DOCTRINE.md`.
+This epoch is about delivering on our ultimate promise: to give Alex an unfair advantage not just in studying, but in predicting and preparing for their future.

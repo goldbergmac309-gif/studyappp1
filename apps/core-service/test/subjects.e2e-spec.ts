@@ -279,4 +279,123 @@ describe('Subjects (e2e)', () => {
       });
     });
   });
+
+  describe('PATCH /subjects/:id', () => {
+    it('updates metadata for owner; validates payload; blocks other users', async () => {
+      // Sign up two users
+      const a = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'patch_a@test.com', password: 'password123' })
+        .expect(201);
+      const tokenA = a.body.accessToken as string;
+      const b = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'patch_b@test.com', password: 'password123' })
+        .expect(201);
+      const tokenB = b.body.accessToken as string;
+
+      // A creates a subject
+      const created = await request(app.getHttpServer())
+        .post('/subjects')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ name: 'Chemistry' })
+        .expect(201);
+      const subjectId = created.body.id as string;
+
+      // Empty payload -> 400
+      await request(app.getHttpServer())
+        .patch(`/subjects/${subjectId}`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({})
+        .expect(400);
+
+      // Invalid color -> 400
+      await request(app.getHttpServer())
+        .patch(`/subjects/${subjectId}`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ color: 'not-a-hex' })
+        .expect(400);
+
+      // Valid update -> 200
+      const res = await request(app.getHttpServer())
+        .patch(`/subjects/${subjectId}`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({
+          name: 'Chem I',
+          courseCode: 'CHEM 101',
+          professorName: 'Dr. Stone',
+          ambition: 'Master stoichiometry',
+          color: '#4F46E5',
+        })
+        .expect(200);
+      expect(res.body.id).toBe(subjectId);
+      expect(res.body.name).toBe('Chem I');
+      expect(res.body.courseCode).toBe('CHEM 101');
+      expect(res.body.professorName).toBe('Dr. Stone');
+      expect(res.body.ambition).toBe('Master stoichiometry');
+      expect(res.body.color).toBe('#4F46E5');
+
+      // Other user cannot update -> 404
+      await request(app.getHttpServer())
+        .patch(`/subjects/${subjectId}`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .send({ name: 'Hacked' })
+        .expect(404);
+    });
+  });
+
+  describe('DELETE /subjects/:id', () => {
+    it('soft-deletes for owner and filters from lists; blocks other users', async () => {
+      // Sign up two users
+      const a = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'del_a@test.com', password: 'password123' })
+        .expect(201);
+      const tokenA = a.body.accessToken as string;
+      const b = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'del_b@test.com', password: 'password123' })
+        .expect(201);
+      const tokenB = b.body.accessToken as string;
+
+      // A creates a subject
+      const created = await request(app.getHttpServer())
+        .post('/subjects')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ name: 'History' })
+        .expect(201);
+      const subjectId = created.body.id as string;
+
+      // B attempts to delete A's subject -> 404
+      await request(app.getHttpServer())
+        .delete(`/subjects/${subjectId}`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .expect(404);
+
+      // A deletes -> 204
+      await request(app.getHttpServer())
+        .delete(`/subjects/${subjectId}`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .expect(204);
+
+      // GET by id should 404
+      await request(app.getHttpServer())
+        .get(`/subjects/${subjectId}`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .expect(404);
+
+      // List should not include archived subject
+      const listAfter = await request(app.getHttpServer())
+        .get('/subjects')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .expect(200);
+      const arr = listAfter.body as Array<{ id: string }>;
+      expect(arr.find((s) => s.id === subjectId)).toBeUndefined();
+
+      // DB archivedAt should be set
+      const row = await prisma.subject.findUnique({ where: { id: subjectId } });
+      expect(row?.archivedAt).toBeTruthy();
+    });
+  });
 });
+2

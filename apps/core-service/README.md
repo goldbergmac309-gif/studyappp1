@@ -63,7 +63,7 @@ Set the following variables (e.g., in `.env`) for local development. CI will inj
 
 ```bash
 # Core
-DATABASE_URL="file:./prisma/dev.db"  # SQLite local dev
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/studyapp_dev?schema=public"  # PostgreSQL local dev
 JWT_SECRET=your-jwt-secret
 
 # S3
