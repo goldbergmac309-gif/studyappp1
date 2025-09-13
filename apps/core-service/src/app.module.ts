@@ -11,6 +11,7 @@ import { S3Module } from './s3/s3.module';
 import { QueueModule } from './queue/queue.module';
 import { InternalModule } from './internal/internal.module';
 import { HealthModule } from './health/health.module';
+import { WorkspaceModule } from './workspace/workspace.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { HealthModule } from './health/health.module';
     DocumentsModule,
     InternalModule,
     HealthModule,
+    WorkspaceModule,
   ],
   controllers: [AppController],
   providers: [AppService],

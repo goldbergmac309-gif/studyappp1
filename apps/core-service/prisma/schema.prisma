@@ -16,6 +16,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   subjects  Subject[]
+  blueprints Blueprint[] @relation("UserBlueprints")
 }
 
 model Subject {
@@ -37,6 +38,11 @@ model Subject {
   
   // Back-relation
   documents  Document[]
+
+  // Workspace extensions (Epoch III)
+  blueprintId  String?
+  activeLayout Blueprint?     @relation("SubjectActiveLayout", fields: [blueprintId], references: [id])
+  widgets      WidgetInstance[]
 }
 
 // Document processing status enum
@@ -71,4 +77,45 @@ model AnalysisResult {
   // Relations
   documentId String @unique
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+// --- Workspace Models ---
+
+// Pre-defined templates for a subject's canvas
+model Persona {
+  id      String @id @default(cuid())
+  name    String @unique // e.g., "STEM Lab", "Humanities Hub"
+  widgets Json   // Default set of widgets and their initial configuration
+}
+
+// A user's saved layout configuration
+model Blueprint {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("UserBlueprints", fields: [userId], references: [id], onDelete: Cascade)
+  name   String   // e.g., "My Weekly Planner Layout"
+  layout Json     // The saved positions and sizes of widgets
+
+  @@unique([userId, name])
+  // Back-relation to Subjects that reference this Blueprint as active layout
+  subjects Subject[] @relation("SubjectActiveLayout")
+}
+
+// An instance of a widget on a specific subject's canvas
+model WidgetInstance {
+  id        String     @id @default(cuid())
+  subjectId String
+  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  type      WidgetType // The type of widget (e.g., NOTES, MIND_MAP)
+  position  Json       // { x, y } coordinates
+  size      Json       // { width, height } dimensions
+  content   Json       // The specific data for this widget instance
+
+  @@index([subjectId])
+}
+
+enum WidgetType {
+  NOTES
+  MIND_MAP
+  FLASHCARDS
 }
