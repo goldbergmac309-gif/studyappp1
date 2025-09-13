@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import CreateSubjectForm from "@/app/(dashboard)/dashboard/_components/create-subject-form"
+import SubjectGenesisModal from "@/app/(dashboard)/dashboard/_components/subject-genesis-modal"
 import SubjectCard from "@/app/(dashboard)/dashboard/_components/subject-card"
 
 type Subject = { id: string; name: string }
@@ -60,10 +60,10 @@ export default function DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle>Create a new subject</CardTitle>
-          <CardDescription>Add a subject to begin organizing your study materials.</CardDescription>
+          <CardDescription>Add a subject with rich metadata to power your insights.</CardDescription>
         </CardHeader>
         <CardContent>
-          <CreateSubjectForm onCreated={fetchSubjects} />
+          <SubjectGenesisModal onCreated={fetchSubjects} />
         </CardContent>
       </Card>
 
@@ -84,7 +84,7 @@ export default function DashboardPage() {
       ) : hasSubjects ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {subjects!.map((s) => (
-            <SubjectCard key={s.id} subject={s} />
+            <SubjectCard key={s.id} subject={s} onChanged={fetchSubjects} />
           ))}
         </div>
       ) : (

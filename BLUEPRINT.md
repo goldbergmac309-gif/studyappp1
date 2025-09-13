@@ -1,138 +1,127 @@
-BLUEPRINT.md (Version 3.1 - The Subjects Expansion)
-code
-Markdown
-# BLUEPRINT & ARCHITECTURAL STATE v3.1 - Synapse OS
+# BLUEPRINT & ARCHITECTURAL STATE v6.0 - Synapse OS
 
-**Document Status:** CANONICAL REALITY. This is your "Single Source of Truth." All code MUST conform to the structures and contracts defined herein. This version officially incorporates the **Subjects Module**.
+**Document Status:** CANONICAL REALITY. This version specifies the full architectural and data contracts for **Epoch II: The Oracle Core & Simulation Engine.** All work must conform to these new specifications.
 
-**Current Focus: Phase 1, Sprint 2 - The Container Core**
+**Current Focus: Phase 2, Sprint 1 - The Command Center Upgrade**
 
-## 1. Target Directory Structure (for `core-service`)
+## 1. Target Directory Structure (Updates)
 
-This structure is now expanded to include the `subjects` module.
+The `core-service` structure will be updated to include DTOs for the new functionality. The `oracle-service` is now a primary, complex application.
+
+
 apps/core-service/src/
-├── app.module.ts
-├── main.ts
-├── prisma/
-│ ├── schema.prisma # <--- DATABASE SCHEMA SSOT (UPDATED)
-│ ├── prisma.module.ts
-│ └── prisma.service.ts
-├── config/
-│ ├── config.module.ts
-│ └── configuration.ts
-├── users/
-│ ├── ... (existing files)
+├── ... (existing modules)
+├── subjects/
 │ └── dto/
-│ └── create-user.dto.ts
-├── subjects/ # <--- NEW MODULE
-│ ├── subjects.module.ts
-│ ├── subjects.controller.ts
-│ ├── subjects.service.ts
-│ └── dto/
-│ └── create-subject.dto.ts
-└── auth/
-├── ... (existing files)
-code
-Code
+│ ├── create-subject.dto.ts
+│ └── update-subject.dto.ts # <--- NEW
+└── ...
+apps/oracle-service/
+├── app/
+│ ├── celery_app.py
+│ ├── config.py
+│ ├── core/ # <--- NEW: For human-written logic cores
+│ │ └── conceptual_engine.py
+│ ├── processors/ # <--- For AI-written wrapper/utility logic
+│ ├── vector_db/
+│ └── workers/
+│ ├── v1_analysis_worker.py # Legacy worker
+│ └── v2_reindex_worker.py # <--- NEW
+
+
 ## 2. Data Contracts (The Law of Definition-First)
 
-The data contracts are now expanded.
+The database schema evolves significantly to support our new intelligence layer.
 
 ### 2.1 Database Schema (`prisma/schema.prisma`)
-The `Subject` model is now active and its relation to `User` is officially defined.
+**Migration Note:** We are officially migrating from SQLite to **PostgreSQL**. The `provider` in the `datasource` block must be changed.
 
 ```prisma
-generator client {
-  provider = "prisma-client-js"
-  output   = "../../../node_modules/.prisma/client"
-}
+// ... (provider must be updated to "postgresql") ...
 
-datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
-}
+// --- User Model Unchanged ---
+model User { ... }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  subjects Subject[] // Relation to subjects
-}
-
+// --- Subject Model EVOLVED ---
 model Subject {
   id        String   @id @default(cuid())
   name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  courseCode String?  // <--- NEW
+  professorName String?// <--- NEW
+  ambition  String?  // <--- NEW
+  color     String?  // <--- NEW
+  archivedAt DateTime? // <--- NEW (for soft deletes)
+  // ... (relations remain the same) ...
 
-  // --- Relation Field ---
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-2.2 Shared DTOs (Data Transfer Objects)
-The new CreateSubjectDto is defined. It MUST be a class to support validation.
-subjects/dto/create-subject.dto.ts:
-code
-TypeScript
-import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
-
-export class CreateSubjectDto {
-  @IsString()
-  @IsNotEmpty({ message: 'Subject name cannot be empty.' })
-  @MaxLength(100, { message: 'Subject name cannot be longer than 100 characters.' })
-  name: string;
-}
-2.3 API Response Contracts
-The SubjectResponse shape is officially defined.
-SubjectResponse:
-code
-TypeScript
-export interface SubjectResponse {
-  id: string;
-  name: string;
-  createdAt: string; // ISO 8601 date string
-  updatedAt: string; // ISO 8601 date string
+  documentChunks DocumentChunk[] // <--- NEW Relation
 }
 
+// --- Document Model Unchanged ---
+model Document { ... }
 
-3. API Contract (The Endpoints You Will Build)
-Service: core-service
-POST /auth/signup
-Request Body: CreateUserDto
-Success (201) Response Body: LoginResponse
-Failure (400) Response: On validation error (e.g., weak password, invalid email).
-Failure (409) Response: If email already exists.
-POST /auth/login
-Request Body: { email, password }
-Success (200) Response Body: LoginResponse
-Failure (401) Response: On invalid credentials.
+// --- AnalysisResult Model DEPRECATED IN FAVOR OF CHUNKS ---
+// This model will be kept for legacy data but new analysis flows here:
 
-4. Canonical Implementations (Core Architectural Patterns)
-These are specific implementations that are non-negotiable to prevent architectural drift.
-Centralized Configuration (config/configuration.ts):
+// --- NEW MODEL: DocumentChunk ---
+model DocumentChunk {
+  id          String   @id @default(cuid())
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkIndex  Int      // The order of the chunk within the document
+  content     String
+  tokenCount  Int
 
+  embedding   Embedding? // Relation to its vector embedding
 
-Centralized Configuration (config/configuration.ts):
-import { registerAs } from '@nestjs/config';
-
-export default registerAs('app', () => ({
-  jwtSecret: process.env.JWT_SECRET,
-}));
-
-
-Injectable Prisma Service (prisma/prisma.service.ts):
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
-
-@Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit {
-  async onModuleInit() {
-    await this.$connect();
-  }
+  @@index([documentId])
 }
+
+// --- NEW MODEL: Embedding ---
+model Embedding {
+  id        String   @id @default(cuid())
+  chunkId   String   @unique
+  chunk     DocumentChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  modelName String   // e.g., 'all-MiniLM-L6-v2'
+  vector    Unsupported("vector(384)") // The vector embedding from pgvector
+}
+
+
+2.2 DTOs (apps/core-service/.../dto/)
+The new UpdateSubjectDto is defined.
+update-subject.dto.ts:```typescript
+import { IsOptional, IsString, MaxLength, Matches } from 'class-validator';
+export class UpdateSubjectDto {
+@IsOptional()
+@IsString()
+@MaxLength(100)
+name?: string;
+@IsOptional()
+@IsString()
+@MaxLength(100)
+courseCode?: string;
+// ... (other optional, validated fields: professorName, ambition, color)
+@IsOptional()
+@Matches(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/, { message: 'Color must be a valid hex code.'})
+color?: string;
+}
+
+
+
+## 3. API Contract (Epoch II Endpoints)
+
+-   **Service:** `core-service`
+    -   `PATCH /subjects/:id`: Updates a subject. (JWT Protected, Body: `UpdateSubjectDto`)
+    -   `DELETE /subjects/:id`: Archives a subject. (JWT Protected)
+    -   `POST /subjects/:id/reindex`: Triggers a deep analysis. (JWT Protected)
+    -   `GET /subjects/:id/search`: Performs semantic search. (JWT Protected, Query Param: `q`)
+
+-   **Service:** `oracle-service` (Internal APIs, Not User-Facing)
+    *This service does not expose public endpoints. It only listens to RabbitMQ and makes callbacks to the `core-service` internal API.*
+
+## 4. Asynchronous Contract (Epoch II Queues)
+
+-   **Queue Name:** `v2_reindexing_jobs`
+-   **Message Payload:** `{ "subjectId": "...", "userId": "..." }`
+
+---
+This updated blueprint is now the single source of truth for all of Epoch II. It provides the full architectural specification required to build our Simulation and Prophecy engine.

@@ -30,6 +30,8 @@ app.conf.update(
     enable_utc=True,
     timezone="UTC",
     imports=("workers.analysis_worker",),
+    # Ensure Celery tasks go to Celery's default queue; our worker will consume both
+    task_default_queue="celery",
 )
 
 
@@ -80,8 +82,12 @@ class RawQueueBridge(bootsteps.ConsumerStep):
                 if key not in payload or not isinstance(payload[key], str) or not payload[key]:
                     raise ValueError(f"Invalid payload: missing or invalid '{key}'")
 
-            # Bridge into Celery task graph
-            self.app.send_task("oracle.process_document", args=[payload])
+            # Bridge into Celery task graph on the default Celery queue to avoid raw-consumer collisions
+            self.app.send_task(
+                "oracle.process_document",
+                args=[payload],
+                queue="celery",
+            )
             message.ack()
             logger.info(
                 "Bridged job to Celery task oracle.process_document (documentId=%s)",

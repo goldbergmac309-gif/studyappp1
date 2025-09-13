@@ -7,6 +7,7 @@ import {
   UploadedFile,
   Param,
   Req,
+  HttpCode,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import multer from 'multer';
@@ -46,6 +47,18 @@ export class DocumentsController {
   ) {
     const userId = req.user.id;
     return this.documentsService.listForSubject(userId, subjectId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/reprocess')
+  @HttpCode(200)
+  async reprocess(
+    @Req() req: RequestWithUser,
+    @Param('subjectId') subjectId: string,
+    @Param('id') documentId: string,
+  ) {
+    const userId = req.user.id;
+    return this.documentsService.reprocess(userId, subjectId, documentId);
   }
 }
 

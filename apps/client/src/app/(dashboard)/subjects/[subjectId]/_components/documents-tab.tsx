@@ -1,12 +1,14 @@
 "use client"
 
 import React, { forwardRef, useCallback, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { UploadCloud } from "lucide-react"
 import DocumentsList from "./documents-list"
 import { useSubjectStore } from "@/lib/subject-store"
+import { reprocessDocument } from "@/lib/api"
+import { toast } from "sonner"
 
 type DocumentsTabProps = {
   uploading: boolean
@@ -19,6 +21,7 @@ const DocumentsTab = forwardRef<HTMLInputElement, DocumentsTabProps>(function Do
   { uploading, uploadProgress, onSelectFiles, onRetry },
   ref
 ) {
+  const { subjectId } = useParams<{ subjectId: string }>()
   const router = useRouter()
   const search = useSearchParams()
   const selectedParam = search.get("doc") ?? undefined
@@ -54,6 +57,20 @@ const DocumentsTab = forwardRef<HTMLInputElement, DocumentsTabProps>(function Do
       router.push(`?${params.toString()}`)
     },
     [router, search]
+  )
+
+  const handleReprocess = useCallback(
+    async (docId: string) => {
+      if (!subjectId) return
+      try {
+        await reprocessDocument(subjectId, docId)
+        toast.success("Reprocessing queued")
+        onRetry?.()
+      } catch (e: unknown) {
+        toast.error("Reprocess failed", { description: String((e as Error)?.message ?? e) })
+      }
+    },
+    [subjectId, onRetry]
   )
 
   return (
@@ -110,6 +127,7 @@ const DocumentsTab = forwardRef<HTMLInputElement, DocumentsTabProps>(function Do
         isLoading={loading}
         error={error ?? undefined}
         onRetry={onRetry}
+        onReprocess={handleReprocess}
       />
     </div>
   )

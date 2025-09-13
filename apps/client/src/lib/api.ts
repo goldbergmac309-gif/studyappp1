@@ -2,7 +2,13 @@
 
 import axios, { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from "axios"
 import { useAuthStore } from "@/lib/store"
-import type { Document as ClientDocument, AnalysisResult } from "@/lib/types"
+import type {
+  Document as ClientDocument,
+  AnalysisResult,
+  Subject,
+  CreateSubjectPayload,
+  UpdateSubjectPayload,
+} from "@/lib/types"
 import type { SubjectInsights } from "@studyapp/shared-types"
 
 // Create a singleton Axios instance configured for the client app.
@@ -137,3 +143,84 @@ export async function getDocumentAnalysis(
 }
 
 export default api
+
+// Subjects API (Epoch II)
+
+export async function listSubjects(options: { signal?: AbortSignal } = {}): Promise<Subject[]> {
+  try {
+    const res = await api.get<Subject[]>(`/subjects`, { signal: options.signal })
+    return Array.isArray(res.data) ? res.data : []
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function createSubject(payload: CreateSubjectPayload): Promise<Subject> {
+  // Backend currently accepts only { name } on create, so we follow with a PATCH for metadata.
+  const { name, ...rest } = payload
+  const createRes = await api.post<Subject>(`/subjects`, { name })
+  const created = createRes.data
+  const hasExtras = Object.keys(rest).length > 0
+  if (created?.id && hasExtras) {
+    try {
+      const patchRes = await api.patch<Subject>(`/subjects/${encodeURIComponent(created.id)}`, rest as UpdateSubjectPayload)
+      return patchRes.data
+    } catch {
+      // If patch fails, still return created subject so UI can continue
+    }
+  }
+  return created
+}
+
+export async function updateSubject(
+  subjectId: string,
+  payload: UpdateSubjectPayload,
+): Promise<Subject> {
+  try {
+    const res = await api.patch<Subject>(`/subjects/${encodeURIComponent(subjectId)}`, payload)
+    return res.data
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function archiveSubject(subjectId: string): Promise<void> {
+  try {
+    await api.delete(`/subjects/${encodeURIComponent(subjectId)}`)
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+// API: POST /subjects/:subjectId/documents/:id/reprocess
+// Returns { id, status: 'QUEUED' } on success
+export async function reprocessDocument(
+  subjectId: string,
+  documentId: string,
+): Promise<{ id: string; status: 'QUEUED' }>
+{
+  try {
+    const res = await api.post<{ id: string; status: 'QUEUED' }>(
+      `/subjects/${encodeURIComponent(subjectId)}/documents/${encodeURIComponent(documentId)}/reprocess`,
+    )
+    return res.data
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}

@@ -24,6 +24,7 @@ import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import DocumentsTab from "@/app/(dashboard)/subjects/[subjectId]/_components/documents-tab"
 import InsightsTab from "@/app/(dashboard)/subjects/[subjectId]/_components/insights-tab"
+import SettingsTab from "@/app/(dashboard)/subjects/[subjectId]/_components/settings-tab"
 import { useDocumentPolling } from "@/lib/hooks/useDocumentPolling"
 
 interface Subject {
@@ -164,6 +165,7 @@ export default function SubjectWorkspacePage() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
             <TabsTrigger value="insights">Insights</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
           <TabsContent value="overview" className="space-y-4">
             <Card>
@@ -187,6 +189,9 @@ export default function SubjectWorkspacePage() {
           </TabsContent>
           <TabsContent value="insights" className="space-y-4">
             <InsightsTab />
+          </TabsContent>
+          <TabsContent value="settings" className="space-y-4">
+            <SettingsTab subjectId={subjectId} onSaved={() => router.refresh()} />
           </TabsContent>
         </Tabs>
       )}
