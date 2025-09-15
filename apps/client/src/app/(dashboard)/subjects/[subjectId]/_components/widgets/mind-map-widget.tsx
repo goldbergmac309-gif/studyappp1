@@ -1,11 +1,13 @@
 "use client"
 
+import { WidgetChrome } from "./widget-chrome"
+
 export function MindMapWidget({ nodesCount }: { nodesCount?: number }) {
   return (
-    <div className="p-3 h-full w-full flex items-center justify-center bg-background">
+    <WidgetChrome title="Mind Map" className="shadow-lift">
       <div className="text-sm text-muted-foreground">
         Mind Map placeholder{typeof nodesCount === 'number' ? ` • ${nodesCount} nodes` : ''}
       </div>
-    </div>
+    </WidgetChrome>
   )
 }

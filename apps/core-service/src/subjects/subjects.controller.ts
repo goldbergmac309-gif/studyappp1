@@ -10,6 +10,7 @@ import {
   Patch,
   Delete,
   HttpCode,
+  Query,
 } from '@nestjs/common';
 import type { Request as ExpressRequest } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -33,8 +34,11 @@ export class SubjectsController {
   }
 
   @Get()
-  findAll(@Request() req: AuthRequest) {
-    return this.subjectsService.findAllByUser(req.user.id);
+  findAll(
+    @Request() req: AuthRequest,
+    @Query('filter') filter?: 'recent' | 'all' | 'starred' | 'archived',
+  ) {
+    return this.subjectsService.findAllByUser(req.user.id, filter ?? 'recent');
   }
 
   @Get(':id')
@@ -59,5 +63,11 @@ export class SubjectsController {
   @HttpCode(204)
   async archive(@Param('id') id: string, @Request() req: AuthRequest) {
     await this.subjectsService.archiveSubject(req.user.id, id);
+  }
+
+  @Post(':id/unarchive')
+  @HttpCode(204)
+  async unarchive(@Param('id') id: string, @Request() req: AuthRequest) {
+    await this.subjectsService.unarchiveSubject(req.user.id, id);
   }
 }

@@ -2,7 +2,19 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import type { Prisma, WidgetInstance } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 
-const VALID_WIDGET_TYPES = new Set(['NOTES', 'MIND_MAP', 'FLASHCARDS'])
+const VALID_WIDGET_TYPES = new Set([
+  'NOTES',
+  'MIND_MAP',
+  'FLASHCARDS',
+  'STICKY_NOTE',
+  'TASKS',
+  'COUNTDOWN',
+  'POMODORO',
+  'CALENDAR_MONTH',
+  'MUSIC_PLAYER',
+  'LINK_TILE',
+  'PROGRESS',
+])
 
 @Injectable()
 export class WorkspaceService {
@@ -11,6 +23,77 @@ export class WorkspaceService {
   async listPersonas(): Promise<Array<{ id: string; name: string }>> {
     const rows = await this.prisma.persona.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } })
     return rows
+  }
+
+  // --- New: widget CRUD ---
+  async createWidget(
+    subjectId: string,
+    userId: string,
+    payload: { type: string; position: { x: number; y: number }; size: { width: number; height: number }; content?: any; style?: any }
+  ) {
+    if (!VALID_WIDGET_TYPES.has(payload.type)) {
+      throw new BadRequestException(`Invalid widget type: ${String(payload.type)}`)
+    }
+    const subject = await this.prisma.subject.findFirst({ where: { id: subjectId, userId, archivedAt: null }, select: { id: true } })
+    if (!subject) throw new NotFoundException('Subject not found')
+
+    const row = await this.prisma.widgetInstance.create({
+      data: {
+        subjectId,
+        type: payload.type as any,
+        position: (payload.position as unknown) as Prisma.InputJsonValue,
+        size: (payload.size as unknown) as Prisma.InputJsonValue,
+        content: ((payload.content ?? {}) as unknown) as Prisma.InputJsonValue,
+        style: ((payload.style ?? {}) as unknown) as Prisma.InputJsonValue,
+      },
+    })
+    return row
+  }
+
+  async updateWidget(
+    subjectId: string,
+    userId: string,
+    widgetId: string,
+    payload: { position?: { x: number; y: number }; size?: { width: number; height: number }; content?: any; style?: any },
+  ) {
+    const widget = await this.prisma.widgetInstance.findFirst({ where: { id: widgetId, subjectId } })
+    if (!widget) throw new NotFoundException('Widget not found')
+    const subject = await this.prisma.subject.findFirst({ where: { id: subjectId, userId, archivedAt: null }, select: { id: true } })
+    if (!subject) throw new NotFoundException('Subject not found')
+
+    const row = await this.prisma.widgetInstance.update({
+      where: { id: widgetId },
+      data: {
+        ...(payload.position ? { position: (payload.position as unknown) as Prisma.InputJsonValue } : {}),
+        ...(payload.size ? { size: (payload.size as unknown) as Prisma.InputJsonValue } : {}),
+        ...(payload.content ? { content: (payload.content as unknown) as Prisma.InputJsonValue } : {}),
+        ...(payload.style ? { style: (payload.style as unknown) as Prisma.InputJsonValue } : {}),
+      },
+    })
+    return row
+  }
+
+  async deleteWidget(subjectId: string, userId: string, widgetId: string) {
+    const widget = await this.prisma.widgetInstance.findFirst({ where: { id: widgetId, subjectId } })
+    if (!widget) throw new NotFoundException('Widget not found')
+    const subject = await this.prisma.subject.findFirst({ where: { id: subjectId, userId, archivedAt: null }, select: { id: true } })
+    if (!subject) throw new NotFoundException('Subject not found')
+    await this.prisma.widgetInstance.delete({ where: { id: widgetId } })
+    return { id: widgetId, deleted: true }
+  }
+
+  // --- Board config ---
+  async getBoardConfig(subjectId: string, userId: string) {
+    const subject = await this.prisma.subject.findFirst({ where: { id: subjectId, userId, archivedAt: null }, select: { boardConfig: true } })
+    if (!subject) throw new NotFoundException('Subject not found')
+    return subject.boardConfig ?? {}
+  }
+
+  async patchBoardConfig(subjectId: string, userId: string, config: any) {
+    const subject = await this.prisma.subject.findFirst({ where: { id: subjectId, userId, archivedAt: null }, select: { id: true } })
+    if (!subject) throw new NotFoundException('Subject not found')
+    const row = await this.prisma.subject.update({ where: { id: subjectId }, data: { boardConfig: (config as unknown) as Prisma.InputJsonValue } })
+    return row.boardConfig ?? {}
   }
 
   async applyPersona(subjectId: string, userId: string, personaId: string): Promise<WidgetInstance[]> {

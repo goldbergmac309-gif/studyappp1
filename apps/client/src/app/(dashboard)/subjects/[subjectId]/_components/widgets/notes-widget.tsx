@@ -1,17 +1,18 @@
 "use client"
 
 import { useState } from "react"
+import { WidgetChrome } from "./widget-chrome"
 
 export function NotesWidget({ initialText }: { initialText?: string }) {
   const [text, setText] = useState(initialText ?? "")
   return (
-    <div className="p-3 h-full w-full bg-background">
+    <WidgetChrome title="Notes" className="shadow-lift">
       <textarea
-        className="h-full w-full resize-none outline-none bg-transparent"
+        className="no-drag h-[160px] w-full resize-none rounded-md border bg-background p-2 text-sm outline-none focus:ring-2 focus:ring-ring"
         placeholder="Write notes..."
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
-    </div>
+    </WidgetChrome>
   )
 }

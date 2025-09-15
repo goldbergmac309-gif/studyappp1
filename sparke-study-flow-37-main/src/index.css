@@ -1,0 +1,186 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+ 
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+ 
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+ 
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+ 
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+ 
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+ 
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+ 
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+ 
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+ 
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+ 
+    --radius: 0.5rem;
+    --widget-radius: 1rem;
+    
+    --sidebar-width: 9rem;
+    --sidebar-width-collapsed: 2.75rem;
+  }
+ 
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+ 
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+ 
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+ 
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+ 
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+ 
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+ 
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+ 
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+ 
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
+}
+ 
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.2s ease-out forwards;
+}
+
+.animate-fade-out {
+  animation: fadeOut 0.2s ease-out forwards;
+}
+
+/* Custom components styles */
+.study-card {
+  @apply bg-white border border-border rounded-lg p-4 shadow-sm transition-all;
+}
+
+.task-item {
+  @apply flex items-start gap-3 py-2 px-1 rounded-md hover:bg-secondary/30 transition-colors;
+}
+
+.animate-pulse-subtle {
+  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.shadow-subtle {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.shadow-lift {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
+/* Apple-style widget styling */
+.apple-widget {
+  @apply bg-white rounded-xl shadow-lift p-5 border-0;
+}
+
+.apple-widget-header {
+  @apply flex items-center justify-between mb-4;
+}
+
+.apple-widget-title {
+  @apply font-medium text-base;
+}
+
+.apple-widget-content {
+  @apply space-y-4;
+}
+
+/* Add hover-delay functionality classes */
+.hover-trigger {
+  position: relative;
+}
+
+.hover-content {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 50;
+  margin-top: 0.25rem;
+  border-radius: 0.5rem;
+}
+
+.hover-trigger:hover .hover-content {
+  display: block;
+  animation: fadeInUp 0.2s ease-out forwards;
+}
+
+/* Sidebar Styles */
+.sidebar-slim {
+  width: var(--sidebar-width-collapsed);
+  transition: width 0.2s ease-in-out;
+}
+
+.sidebar-expanded {
+  width: var(--sidebar-width);
+  transition: width 0.2s ease-in-out;
+}
+
+.sidebar-item {
+  @apply flex items-center gap-2.5 py-2.5 px-3 rounded-md transition-colors;
+}

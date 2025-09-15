@@ -13,6 +13,29 @@ async function clearClientState(page: Page) {
   })
 }
 
+async function createSubjectViaInlineOrModal(page: Page, name: string) {
+  const inline = page.getByPlaceholder('e.g. Linear Algebra')
+  if (await inline.count()) {
+    await inline.first().fill(name)
+    await page.getByRole('button', { name: /^(?:\+\s*)?Create(?: Subject)?$/ }).click()
+    await expect(page.getByText(name)).toBeVisible()
+    return
+  }
+  // Fallback to modal tile
+  const addTile = page.getByText('+ Add space')
+  await addTile.click()
+  // Wait for dialog and fill step 1
+  const modal = page.getByRole('dialog')
+  await expect(modal).toBeVisible()
+  const modalInput = modal.getByPlaceholder('e.g. Linear Algebra')
+  await modalInput.fill(name)
+  // Step 1 -> Continue
+  await modal.getByRole('button', { name: /^Continue$/ }).click()
+  // Step 2 -> Create Subject
+  await modal.getByRole('button', { name: /^Create Subject$/ }).click()
+  await expect(page.getByText(name)).toBeVisible()
+}
+
 test.describe('Client Gauntlet', () => {
   test('The New User Gauntlet (First Five Minutes)', async ({ page, context }) => {
     const email = uniqueEmail()
@@ -30,10 +53,7 @@ test.describe('Client Gauntlet', () => {
     await expect(page.getByText('Account created')).toBeVisible()
     await expect(page).toHaveURL(/\/dashboard$/)
     await expect(page.getByText('No subjects yet')).toBeVisible()
-
-    await page.getByPlaceholder('e.g. Linear Algebra').fill('Biology')
-    await page.getByRole('button', { name: 'Create' }).click()
-    await expect(page.getByText('Biology')).toBeVisible()
+    await createSubjectViaInlineOrModal(page, 'Biology')
   })
 
   test('The Unauthorized Access Gauntlet (Security)', async ({ page, context }) => {
@@ -60,10 +80,7 @@ test.describe('Client Gauntlet', () => {
     await expect(page).toHaveURL(/\/dashboard$/)
 
     const subjectName = `Biology E2E ${Date.now()}`
-    // Create a unique subject to avoid multiple matches
-    await page.getByPlaceholder('e.g. Linear Algebra').fill(subjectName)
-    await page.getByRole('button', { name: 'Create' }).click()
-    await expect(page.getByText(subjectName)).toBeVisible()
+    await createSubjectViaInlineOrModal(page, subjectName)
     await page.getByRole('link', { name: new RegExp(subjectName) }).first().click()
 
     await page.getByRole('tab', { name: 'Documents' }).click()

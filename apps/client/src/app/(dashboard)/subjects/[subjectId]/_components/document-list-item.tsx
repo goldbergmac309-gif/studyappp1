@@ -46,8 +46,8 @@ export function DocumentListItem({ doc, isActive, onClick, onReprocess }: Docume
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center justify-between rounded-md border p-3 text-left transition-colors",
-        isActive ? "border-ring ring-2 ring-ring/30" : "hover:bg-muted/50"
+        "flex w-full items-center justify-between rounded-xl border p-3 text-left transition-all bg-card",
+        isActive ? "border-ring ring-2 ring-ring/30 shadow-subtle" : "hover:bg-muted/40 hover:shadow-subtle"
       )}
       aria-pressed={isActive}
     >

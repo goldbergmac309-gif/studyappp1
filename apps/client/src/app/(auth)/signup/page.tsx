@@ -5,8 +5,8 @@ import { SignupForm } from "@/components/auth/SignupForm"
 
 export default function SignupPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[hsl(210_40%_96%)]/40">
+      <Card className="w-full max-w-md rounded-xl shadow-lift">
         <CardHeader>
           <CardTitle>Create account</CardTitle>
           <CardDescription>Join Synapse OS. Create your account to get started.</CardDescription>

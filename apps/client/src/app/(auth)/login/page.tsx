@@ -5,8 +5,8 @@ import { LoginForm } from "@/components/auth/LoginForm"
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[hsl(210_40%_96%)]/40">
+      <Card className="w-full max-w-md rounded-xl shadow-lift">
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
           <CardDescription>Welcome back. Enter your credentials to access your workspace.</CardDescription>

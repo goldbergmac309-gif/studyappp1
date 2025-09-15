@@ -3,19 +3,21 @@
 import Link from "next/link"
 import { useState } from "react"
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { BookText, MoreVertical, PencilLine, Settings as SettingsIcon, Archive, Loader2 } from "lucide-react"
+import { BookText, MoreVertical, PencilLine, Settings as SettingsIcon, Archive, Loader2, Star, Undo2 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { updateSubject, archiveSubject } from "@/lib/api"
+import { updateSubject, archiveSubject, unarchiveSubject, setSubjectStarred } from "@/lib/api"
+import type { Subject } from "@/lib/types"
 
 export interface SubjectCardProps {
-  subject: { id: string; name: string }
+  subject: Subject
   onChanged?: () => Promise<void> | void
+  isArchivedView?: boolean
 }
 
-export default function SubjectCard({ subject, onChanged }: SubjectCardProps) {
+export default function SubjectCard({ subject, onChanged, isArchivedView = false }: SubjectCardProps) {
   const [renameOpen, setRenameOpen] = useState(false)
   const [newName, setNewName] = useState(subject.name)
   const [busy, setBusy] = useState(false)
@@ -43,10 +45,30 @@ export default function SubjectCard({ subject, onChanged }: SubjectCardProps) {
     }
   }
 
+  async function handleUnarchive() {
+    try {
+      setBusy(true)
+      await unarchiveSubject(subject.id)
+      await onChanged?.()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleToggleStar() {
+    try {
+      setBusy(true)
+      await setSubjectStarred(subject.id, !subject.starred)
+      await onChanged?.()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="group relative">
       <Link href={`/subjects/${subject.id}`} className="block">
-        <Card className="transition-colors hover:border-foreground/30">
+        <Card className="rounded-xl shadow-subtle transition-all hover:shadow-lift hover:border-foreground/30">
           <CardHeader className="flex flex-row items-center gap-3 justify-between">
             <div className="flex items-center gap-3">
               <div className="rounded-md border bg-background p-2 text-foreground/80 group-hover:text-foreground">
@@ -54,7 +76,10 @@ export default function SubjectCard({ subject, onChanged }: SubjectCardProps) {
               </div>
               <div>
                 <CardTitle className="leading-tight">{subject.name}</CardTitle>
-                <CardDescription>Open workspace</CardDescription>
+                <CardDescription className="flex items-center gap-1">
+                  Open workspace
+                  {subject.starred ? <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400" /> : null}
+                </CardDescription>
               </div>
             </div>
             <div onClick={(e) => e.preventDefault()}>
@@ -65,6 +90,9 @@ export default function SubjectCard({ subject, onChanged }: SubjectCardProps) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleToggleStar}>
+                    <Star className="mr-2 h-4 w-4" /> {subject.starred ? "Unstar" : "Star"}
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setRenameOpen(true)}>
                     <PencilLine className="mr-2 h-4 w-4" /> Rename
                   </DropdownMenuItem>
@@ -73,9 +101,15 @@ export default function SubjectCard({ subject, onChanged }: SubjectCardProps) {
                       <SettingsIcon className="mr-2 h-4 w-4" /> Settings
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleArchive} className="text-red-600 focus:text-red-600">
-                    <Archive className="mr-2 h-4 w-4" /> Archive
-                  </DropdownMenuItem>
+                  {isArchivedView ? (
+                    <DropdownMenuItem onClick={handleUnarchive}>
+                      <Undo2 className="mr-2 h-4 w-4" /> Unarchive
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={handleArchive} className="text-red-600 focus:text-red-600">
+                      <Archive className="mr-2 h-4 w-4" /> Archive
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

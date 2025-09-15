@@ -18,23 +18,23 @@ export default defineConfig({
     video: 'retain-on-failure',
     headless: true,
   },
-  // If you prefer Playwright to launch the dev server automatically, uncomment below.
-  // You can specify multiple servers in recent Playwright versions as an array.
-  // webServer: [
-  //   {
-  //     command: 'pnpm dev',
-  //     cwd: __dirname,
-  //     port: 3100,
-  //     reuseExistingServer: true,
-  //     timeout: 120_000,
-  //   },
-  //   {
-  //     command: 'pnpm -F core-service start:dev',
-  //     port: 3000,
-  //     reuseExistingServer: true,
-  //     timeout: 120_000,
-  //   },
-  // ],
+  // Auto-start dev servers for tests
+  webServer: [
+    {
+      command: 'pnpm dev',
+      cwd: __dirname,
+      port: 3100,
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    {
+      command: 'pnpm -F core-service start:dev',
+      cwd: __dirname + '/../core-service',
+      port: 3000,
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+  ],
   projects: [
     {
       name: 'chromium',

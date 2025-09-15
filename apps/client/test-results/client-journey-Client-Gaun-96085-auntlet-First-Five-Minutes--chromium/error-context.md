@@ -1,0 +1,124 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - navigation [ref=e7]:
+      - generic [ref=e8]:
+        - generic [ref=e11]: Synapse
+        - generic [ref=e12]:
+          - generic [ref=e13]: Navigation
+          - list [ref=e15]:
+            - listitem [ref=e16]:
+              - link "Dashboard" [ref=e17] [cursor=pointer]:
+                - /url: /dashboard
+                - img [ref=e18] [cursor=pointer]
+                - generic [ref=e23] [cursor=pointer]: Dashboard
+        - generic [ref=e25]:
+          - generic [ref=e26]: Subjects
+          - list [ref=e28]:
+            - listitem [ref=e29]:
+              - link "All subjects" [ref=e30] [cursor=pointer]:
+                - /url: /subjects
+                - img [ref=e31] [cursor=pointer]
+                - generic [ref=e33] [cursor=pointer]: All subjects
+        - generic [ref=e34]:
+          - generic [ref=e35]: Recent
+          - list [ref=e37]:
+            - generic [ref=e38]: No recent
+        - generic [ref=e40]:
+          - generic [ref=e41]: Account
+          - list [ref=e43]:
+            - listitem [ref=e44]:
+              - link "Profile" [ref=e45] [cursor=pointer]:
+                - /url: /profile
+                - img [ref=e46] [cursor=pointer]
+                - generic [ref=e49] [cursor=pointer]: Profile
+            - listitem [ref=e50]:
+              - link "Settings" [ref=e51] [cursor=pointer]:
+                - /url: /settings
+                - img [ref=e52] [cursor=pointer]
+                - generic [ref=e55] [cursor=pointer]: Settings
+      - button "Toggle Sidebar" [ref=e57]
+    - main [ref=e58]:
+      - generic [ref=e60]:
+        - generic [ref=e61]:
+          - button "Toggle Sidebar" [ref=e62]:
+            - img
+            - generic [ref=e63]: Toggle Sidebar
+          - link "S Synapse OS" [ref=e64] [cursor=pointer]:
+            - /url: /dashboard
+            - generic [ref=e65] [cursor=pointer]: S
+            - generic [ref=e66] [cursor=pointer]: Synapse OS
+        - textbox "Search (⌘K)" [ref=e68]
+        - generic [ref=e69]:
+          - button "Start Session" [ref=e70]
+          - button "Upgrade" [ref=e71]
+          - button "User menu" [ref=e72]:
+            - generic [ref=e74]: E
+      - generic [ref=e76]:
+        - generic [ref=e77]:
+          - generic [ref=e79] [cursor=pointer]:
+            - img [ref=e81] [cursor=pointer]
+            - generic [ref=e82] [cursor=pointer]: Learning Insights
+          - generic [ref=e84] [cursor=pointer]:
+            - img [ref=e86] [cursor=pointer]
+            - generic [ref=e88] [cursor=pointer]: "Next: Biology Midterm"
+            - generic [ref=e89] [cursor=pointer]: Ad
+          - generic [ref=e91] [cursor=pointer]:
+            - img [ref=e93] [cursor=pointer]
+            - generic [ref=e95] [cursor=pointer]: Today's Classes
+        - generic [ref=e96]:
+          - heading "What do you want to learn today?" [level=2] [ref=e97]
+          - generic [ref=e99]:
+            - generic [ref=e100]:
+              - img [ref=e102]
+              - textbox "Ask anything about your studies..." [ref=e104]
+            - button "Ask" [ref=e105]
+        - generic [ref=e106]:
+          - generic [ref=e107]:
+            - heading "My spaces" [level=3] [ref=e108]
+            - generic [ref=e109]:
+              - generic [ref=e110]:
+                - button "Recent" [ref=e111]:
+                  - img [ref=e112]
+                  - generic [ref=e115]: Recent
+                - button "Starred" [ref=e116]:
+                  - img [ref=e117]
+                  - generic [ref=e119]: Starred
+                - button "All" [ref=e120]:
+                  - img [ref=e121]
+                  - generic [ref=e123]: All
+                - button "Archived" [ref=e124]:
+                  - img [ref=e125]
+                  - generic [ref=e128]: Archived
+              - button "View all" [ref=e129]
+          - generic [ref=e130]: No subjects yet — create one to get started.
+        - generic [ref=e131]:
+          - generic [ref=e132]:
+            - heading "Explore topics" [level=3] [ref=e133]
+            - link "Browse all" [ref=e134] [cursor=pointer]:
+              - /url: /topics
+              - generic [ref=e135] [cursor=pointer]: Browse all
+              - img
+          - generic [ref=e136]:
+            - generic [ref=e137] [cursor=pointer]:
+              - 'img "Cognitive Psychology: An Introduction" [ref=e139] [cursor=pointer]'
+              - 'heading "Cognitive Psychology: An Introduction" [level=4] [ref=e141] [cursor=pointer]'
+            - generic [ref=e142] [cursor=pointer]:
+              - img "Neural Networks Fundamentals" [ref=e144] [cursor=pointer]
+              - heading "Neural Networks Fundamentals" [level=4] [ref=e146] [cursor=pointer]
+            - generic [ref=e147] [cursor=pointer]:
+              - img "Advanced Statistics" [ref=e149] [cursor=pointer]
+              - heading "Advanced Statistics" [level=4] [ref=e151] [cursor=pointer]
+            - generic [ref=e152] [cursor=pointer]:
+              - img "Cell Biology" [ref=e154] [cursor=pointer]
+              - heading "Cell Biology" [level=4] [ref=e156] [cursor=pointer]
+  - region "Notifications alt+T"
+  - generic [ref=e157]:
+    - heading "Command Palette" [level=2] [ref=e158]
+    - paragraph [ref=e159]: Search for a command to run...
+  - button "Open Next.js Dev Tools" [ref=e165] [cursor=pointer]:
+    - img [ref=e166] [cursor=pointer]
+  - alert [ref=e169]
+```
