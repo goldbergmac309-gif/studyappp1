@@ -3,66 +3,63 @@
 import { PropsWithChildren, useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
-import { Separator } from "@/components/ui/separator"
-import { Skeleton } from "@/components/ui/skeleton"
+import AppSidebar from "@/app/(dashboard)/_components/sidebar"
 import Header from "@/app/(dashboard)/_components/header"
-import Sidebar from "@/app/(dashboard)/_components/sidebar"
-import HealthBanner from "@/components/health-banner"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Sidebar, SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
 export default function ProtectedLayout({ children }: PropsWithChildren) {
   const { token } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const [hydrated, setHydrated] = useState(false)
+  // Sidebar open state is managed by SidebarProvider internally
 
-  // Ensure we only check auth after client hydration (persist rehydration)
-  useEffect(() => {
-    setHydrated(true)
-  }, [])
+  useEffect(() => { setHydrated(true) }, [])
 
   useEffect(() => {
     if (!hydrated) return
     if (!token) {
-      // Preserve intended destination in query if needed later
       const to = pathname && pathname !== "/" ? `?next=${encodeURIComponent(pathname)}` : ""
       router.replace(`/login${to}`)
     }
   }, [hydrated, token, router, pathname])
 
+  // Sidebar persistence handled by SidebarProvider
+
   if (!hydrated) {
     return (
-      <div className="min-h-screen p-6">
-        <div className="mx-auto max-w-6xl space-y-4">
-          <div className="flex items-center justify-between">
-            <Skeleton className="h-6 w-40" />
-            <Skeleton className="h-10 w-10 rounded-full" />
+      <div className="min-h-screen grid grid-cols-1 md:grid-cols-[272px_1fr]">
+        <aside className="hidden md:block bg-sidebar" />
+        <main className="p-8">
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-48" />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Skeleton className="h-40 w-full" />
+              <Skeleton className="h-40 w-full" />
+            </div>
           </div>
-          <Separator />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Skeleton className="h-40 w-full" />
-            <Skeleton className="h-40 w-full" />
-          </div>
-        </div>
+        </main>
       </div>
     )
   }
 
-  if (!token) {
-    // While we redirect, render nothing to avoid flicker
-    return null
-  }
+  if (!token) return null
 
-  // Authenticated shell
+  // AppShell: Sidebar + Inset content
   return (
-    <div className="min-h-screen">
-      <HealthBanner />
-      <Header />
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-4 md:grid-cols-[220px_1fr] md:px-6 md:py-6">
-        <aside className="hidden md:block">
-          <Sidebar />
-        </aside>
-        <main className="space-y-6 md:space-y-8">{children}</main>
+    <SidebarProvider defaultOpen>
+      <div className="flex min-h-screen bg-background">
+        <Sidebar>
+          <AppSidebar />
+        </Sidebar>
+        <SidebarInset>
+          <Header />
+          <div className="mx-auto max-w-7xl w-full p-6 md:p-8 lg:p-10">
+            {children}
+          </div>
+        </SidebarInset>
       </div>
-    </div>
+    </SidebarProvider>
   )
 }

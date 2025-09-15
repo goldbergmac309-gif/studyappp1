@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 
 export default function Header() {
   const { user, actions } = useAuth()
@@ -26,14 +28,23 @@ export default function Header() {
   }
 
   return (
-    <header className="border-b">
+    <header className="sticky top-0 z-30 border-b bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 md:px-6 md:py-4">
-        <Link href="/dashboard" className="font-semibold">
-          Synapse OS
-        </Link>
+        <div className="flex items-center gap-3 min-w-[44px]">
+          <SidebarTrigger />
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <div className="bg-primary text-primary-foreground h-8 w-8 rounded-full flex items-center justify-center font-medium">
+              S
+            </div>
+            <span className="font-medium tracking-tight hidden sm:block">Synapse OS</span>
+          </Link>
+        </div>
         <div className="hidden md:block flex-1 max-w-2xl">
           <Input placeholder="Search (⌘K)" className="w-full" />
         </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="text-xs h-9">Start Session</Button>
+          <Button variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/5 hover:border-primary/90 text-xs h-9">Upgrade</Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -59,6 +70,7 @@ export default function Header() {
             <DropdownMenuItem onClick={handleLogout}>Log out</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </div>
     </header>
   )

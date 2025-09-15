@@ -4,8 +4,7 @@ import { useEffect, useState } from "react"
 import { z } from "zod"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { createSubject, listPersonas, applyPersona } from "@/lib/api"
-import type { PersonaListItem } from "@studyapp/shared-types"
+import { createSubject } from "@/lib/api"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,22 +37,16 @@ const step1Schema = z.object({
 const step2Schema = z.object({
   professorName: z.string().max(100, "Max 100 characters").optional(),
   ambition: z.string().max(200, "Keep it concise").optional(),
-  personaId: z.string().optional(),
 })
 
 type Step1Values = z.infer<typeof step1Schema>
-interface Step2Values {
-  professorName?: string
-  ambition?: string
-  personaId?: string
-}
+type Step2Values = z.infer<typeof step2Schema>
 type AllValues = Step1Values & Step2Values
 
-export default function SubjectGenesisModal({ onCreated }: { onCreated?: () => Promise<void> | void }) {
+export default function SubjectGenesisModal({ onCreated, trigger }: { onCreated?: () => Promise<void> | void; trigger?: React.ReactNode }) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<1 | 2>(1)
-  const [personas, setPersonas] = useState<PersonaListItem[]>([])
-  const [loadingPersonas, setLoadingPersonas] = useState(false)
+  
   const router = useRouter()
 
   const form1 = useForm<Step1Values>({
@@ -63,25 +56,15 @@ export default function SubjectGenesisModal({ onCreated }: { onCreated?: () => P
   })
   const form2 = useForm<Step2Values>({
     resolver: zodResolver(step2Schema),
-    defaultValues: { professorName: "", ambition: "", personaId: "" },
+    defaultValues: { professorName: "", ambition: "" },
     mode: "onChange",
   })
 
   const resetAll = () => {
     form1.reset({ name: "", courseCode: "", color: "" })
-    form2.reset({ professorName: "", ambition: "", personaId: "" })
+    form2.reset({ professorName: "", ambition: "" })
     setStep(1)
   }
-
-  useEffect(() => {
-    if (open && step === 2 && personas.length === 0 && !loadingPersonas) {
-      setLoadingPersonas(true)
-      listPersonas()
-        .then((items: PersonaListItem[]) => setPersonas(items))
-        .finally(() => setLoadingPersonas(false))
-        .catch(() => {})
-    }
-  }, [open, step, personas.length, loadingPersonas])
 
   const handleCreate = async () => {
     const s1 = form1.getValues()
@@ -94,18 +77,10 @@ export default function SubjectGenesisModal({ onCreated }: { onCreated?: () => P
       ambition: s2.ambition || undefined,
     }
     const created = await createSubject(payload)
-    // Apply persona if selected
-    if (created?.id && s2.personaId) {
-      try {
-        await applyPersona(created.id, s2.personaId)
-      } catch (e) {
-        // non-fatal; user can still proceed
-      }
-    }
     await onCreated?.()
     // Navigate to canvas for immediate aha moment
     if (created?.id) {
-      router.push(`/subjects/${encodeURIComponent(created.id)}/canvas`)
+      router.push(`/subjects/${encodeURIComponent(created.id)}`)
     }
     resetAll()
     setOpen(false)
@@ -113,9 +88,15 @@ export default function SubjectGenesisModal({ onCreated }: { onCreated?: () => P
 
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetAll() }}>
-      <DialogTrigger asChild>
-        <Button>+ Create Subject</Button>
-      </DialogTrigger>
+      {trigger ? (
+        <DialogTrigger asChild>
+          {trigger}
+        </DialogTrigger>
+      ) : (
+        <DialogTrigger asChild>
+          <Button>+ Create Subject</Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>{step === 1 ? "Create Subject" : "Add Context (Optional)"}</DialogTitle>
@@ -194,30 +175,7 @@ export default function SubjectGenesisModal({ onCreated }: { onCreated?: () => P
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form2.control}
-                name="personaId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Persona (optional)</FormLabel>
-                    <FormControl>
-                      <select
-                        className="w-full border rounded-md px-3 py-2 bg-background"
-                        value={field.value ?? ""}
-                        onChange={(e) => field.onChange(e.target.value)}
-                      >
-                        <option value="">No persona</option>
-                        {personas.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Persona removed: simplified step */}
             </form>
           </Form>
         )}

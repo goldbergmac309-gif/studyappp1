@@ -30,6 +30,7 @@ model Subject {
   professorName String?
   ambition      String?
   color         String?
+  starred       Boolean  @default(false)
   archivedAt    DateTime?
 
   // Relation to User (owner)
@@ -43,6 +44,8 @@ model Subject {
   blueprintId  String?
   activeLayout Blueprint?     @relation("SubjectActiveLayout", fields: [blueprintId], references: [id])
   widgets      WidgetInstance[]
+  // Board configuration (backgrounds, grid density etc.)
+  boardConfig  Json?
 }
 
 // Document processing status enum
@@ -110,6 +113,7 @@ model WidgetInstance {
   position  Json       // { x, y } coordinates
   size      Json       // { width, height } dimensions
   content   Json       // The specific data for this widget instance
+  style     Json?      // Presentation style: accent, bg, elevation, radius
 
   @@index([subjectId])
 }
@@ -118,4 +122,12 @@ enum WidgetType {
   NOTES
   MIND_MAP
   FLASHCARDS
+  STICKY_NOTE
+  TASKS
+  COUNTDOWN
+  POMODORO
+  CALENDAR_MONTH
+  MUSIC_PLAYER
+  LINK_TILE
+  PROGRESS
 }

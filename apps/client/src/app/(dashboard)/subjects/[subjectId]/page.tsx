@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useState, useCallback, useRef } from "react"
+import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import { BookText, FileUp, AlertCircle } from "lucide-react"
+import { AlertCircle, History } from "lucide-react"
 
 import api from "@/lib/api"
 import { isAxiosError } from "axios"
@@ -16,21 +16,15 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
-import { toast } from "sonner"
+import { CanvasGrid } from "@/app/(dashboard)/subjects/[subjectId]/_components/canvas/canvas-grid"
 import DocumentsTab from "@/app/(dashboard)/subjects/[subjectId]/_components/documents-tab"
-import InsightsTab from "@/app/(dashboard)/subjects/[subjectId]/_components/insights-tab"
-import SettingsTab from "@/app/(dashboard)/subjects/[subjectId]/_components/settings-tab"
 import { useDocumentPolling } from "@/lib/hooks/useDocumentPolling"
 
-interface Subject {
-  id: string
-  name: string
-}
+interface Subject { id: string; name: string }
 
 export default function SubjectWorkspacePage() {
   const { subjectId } = useParams<{ subjectId: string }>()
@@ -39,14 +33,16 @@ export default function SubjectWorkspacePage() {
   const [subject, setSubject] = useState<Subject | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [editMode, setEditMode] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Own the unified polling lifecycle for this subject
+  // Own the unified polling lifecycle for this subject (for resources/documents)
   const { start, stop } = useDocumentPolling(subjectId, { autoStart: false })
 
   const title = useMemo(() => subject?.name ?? "Subject", [subject])
+  const subtitle = useMemo(() => "Calculus and advanced algebra", [])
 
   useEffect(() => {
     async function fetchSubject() {
@@ -64,14 +60,22 @@ export default function SubjectWorkspacePage() {
     fetchSubject()
   }, [subjectId])
 
+  // Keyboard shortcuts: E toggles edit mode
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.key === 'e' || e.key === 'E') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        setEditMode((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // Start polling after subject is fetched (not loading)
   useEffect(() => {
-    if (!loading && subjectId) {
-      start()
-    }
-    return () => {
-      stop()
-    }
+    if (!loading && subjectId) start()
+    return () => { stop() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, subjectId])
 
@@ -91,10 +95,8 @@ export default function SubjectWorkspacePage() {
             setUploadProgress(pct)
           },
         })
-        toast.success("Upload queued", { description: file.name })
-      } catch (e: unknown) {
-        const message = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : "Upload failed"
-        toast.error("Upload failed", { description: String(message) })
+      } catch (e) {
+        // handled inside DocumentsTab via toast on retry, keep page quiet
       } finally {
         setUploading(false)
         setUploadProgress(0)
@@ -105,17 +107,33 @@ export default function SubjectWorkspacePage() {
 
   return (
     <div className="space-y-6 md:space-y-8">
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>{title}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+      {/* Header: Breadcrumbs + Title + Actions */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/dashboard">Home</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>{loading ? <Skeleton className="h-5 w-40" /> : title}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">{loading ? '—' : title}</h1>
+            <p className="text-sm text-muted-foreground -mt-0.5">{subtitle}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setEditMode(false)} aria-pressed={!editMode} aria-label="View mode (E to toggle)">View Mode</Button>
+          <Button onClick={() => setEditMode((v) => !v)} aria-pressed={editMode} aria-label="Edit board (E to toggle)">Edit Board</Button>
+          <Button variant="secondary" onClick={() => router.push(`/subjects/${subjectId}/tutor`)} aria-label="Study History" className="hidden md:inline-flex">
+            <History className="h-4 w-4 mr-2" /> Study History
+          </Button>
+        </div>
+      </div>
 
       {error && (
         <Alert variant="destructive">
@@ -124,25 +142,6 @@ export default function SubjectWorkspacePage() {
           <AlertDescription className="ml-6">{error}</AlertDescription>
         </Alert>
       )}
-
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="rounded-md border bg-background p-2 text-foreground/80">
-            <BookText className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {loading ? <Skeleton className="h-7 w-48" /> : title}
-            </h1>
-            <p className="text-muted-foreground text-sm">Your subject workspace</p>
-          </div>
-        </div>
-        <div>
-          <Button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-            <FileUp className="mr-2 h-4 w-4" /> Upload document
-          </Button>
-        </div>
-      </div>
 
       <Separator />
 
@@ -163,22 +162,17 @@ export default function SubjectWorkspacePage() {
         >
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-            <TabsTrigger value="insights">Insights</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+            <TabsTrigger value="notes">Notes</TabsTrigger>
+            <TabsTrigger value="resources">Resources</TabsTrigger>
+            <TabsTrigger value="practice">Practice</TabsTrigger>
           </TabsList>
           <TabsContent value="overview" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Progress</CardTitle>
-                <CardDescription>Key metrics for this subject</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm text-muted-foreground">Coming soon</div>
-              </CardContent>
-            </Card>
+            <CanvasGrid subjectId={String(subjectId)} editMode={editMode} />
           </TabsContent>
-          <TabsContent value="documents" className="space-y-4">
+          <TabsContent value="notes" className="space-y-4">
+            <div className="text-sm text-muted-foreground">Notes view — coming soon.</div>
+          </TabsContent>
+          <TabsContent value="resources" className="space-y-4">
             <DocumentsTab
               uploading={uploading}
               uploadProgress={uploadProgress}
@@ -187,11 +181,8 @@ export default function SubjectWorkspacePage() {
               ref={fileInputRef}
             />
           </TabsContent>
-          <TabsContent value="insights" className="space-y-4">
-            <InsightsTab />
-          </TabsContent>
-          <TabsContent value="settings" className="space-y-4">
-            <SettingsTab subjectId={subjectId} onSaved={() => router.refresh()} />
+          <TabsContent value="practice" className="space-y-4">
+            <div className="text-sm text-muted-foreground">Practice view — coming soon.</div>
           </TabsContent>
         </Tabs>
       )}

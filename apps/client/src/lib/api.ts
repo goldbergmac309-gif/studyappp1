@@ -11,9 +11,11 @@ import type {
 } from "@/lib/types"
 import type {
   SubjectInsights,
-  PersonaListItem,
   WidgetInstanceDto,
   UpdateWorkspaceLayoutDto,
+  CreateWidgetInstanceDto,
+  UpdateWidgetInstanceDto,
+  BoardConfigDto,
 } from "@studyapp/shared-types"
 
 // Create a singleton Axios instance configured for the client app.
@@ -44,33 +46,19 @@ api.interceptors.response.use(
   }
 )
 
-// Workspace API (Epoch III)
-
-export async function listPersonas(options: { signal?: AbortSignal } = {}): Promise<PersonaListItem[]> {
-  try {
-    const res = await api.get<PersonaListItem[]>(`/workspace/personas`, { signal: options.signal })
-    return Array.isArray(res.data) ? res.data : []
-  } catch (err) {
-    if (axios.isAxiosError(err)) {
-      if ((err as AxiosError).code === "ERR_CANCELED") throw err
-      throw new Error(extractErrorMessage(err))
-    }
-    throw err
-  }
-}
-
-export async function applyPersona(
+// Widget CRUD (Epoch IV)
+export async function addWidget(
   subjectId: string,
-  personaId: string,
+  payload: CreateWidgetInstanceDto,
   options: { signal?: AbortSignal } = {}
-): Promise<WidgetInstanceDto[]> {
+): Promise<WidgetInstanceDto> {
   try {
-    const res = await api.post<WidgetInstanceDto[]>(
-      `/subjects/${encodeURIComponent(subjectId)}/apply-persona`,
-      { personaId },
+    const res = await api.post<WidgetInstanceDto>(
+      `/subjects/${encodeURIComponent(subjectId)}/widgets`,
+      payload,
       { signal: options.signal },
     )
-    return Array.isArray(res.data) ? res.data : []
+    return res.data
   } catch (err) {
     if (axios.isAxiosError(err)) {
       if ((err as AxiosError).code === "ERR_CANCELED") throw err
@@ -79,6 +67,89 @@ export async function applyPersona(
     throw err
   }
 }
+
+export async function updateWidget(
+  subjectId: string,
+  widgetId: string,
+  payload: UpdateWidgetInstanceDto,
+  options: { signal?: AbortSignal } = {}
+): Promise<WidgetInstanceDto> {
+  try {
+    const res = await api.patch<WidgetInstanceDto>(
+      `/subjects/${encodeURIComponent(subjectId)}/widgets/${encodeURIComponent(widgetId)}`,
+      payload,
+      { signal: options.signal },
+    )
+    return res.data
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function deleteWidget(
+  subjectId: string,
+  widgetId: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<{ id: string; deleted: true }> {
+  try {
+    const res = await api.delete<{ id: string; deleted: true }>(
+      `/subjects/${encodeURIComponent(subjectId)}/widgets/${encodeURIComponent(widgetId)}`,
+      { signal: options.signal },
+    )
+    return res.data
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function getBoardConfig(
+  subjectId: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<BoardConfigDto> {
+  try {
+    const res = await api.get<BoardConfigDto>(
+      `/subjects/${encodeURIComponent(subjectId)}/board-config`,
+      { signal: options.signal },
+    )
+    return res.data || {}
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function patchBoardConfig(
+  subjectId: string,
+  payload: BoardConfigDto,
+  options: { signal?: AbortSignal } = {}
+): Promise<BoardConfigDto> {
+  try {
+    const res = await api.patch<BoardConfigDto>(
+      `/subjects/${encodeURIComponent(subjectId)}/board-config`,
+      payload,
+      { signal: options.signal },
+    )
+    return res.data || {}
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+// Workspace API (Epoch III)
 
 export async function getSubjectWorkspace(
   subjectId: string,
@@ -228,9 +299,12 @@ export default api
 
 // Subjects API (Epoch II)
 
-export async function listSubjects(options: { signal?: AbortSignal } = {}): Promise<Subject[]> {
+export async function listSubjects(
+  filter: 'recent' | 'all' | 'starred' | 'archived' = 'recent',
+  options: { signal?: AbortSignal } = {},
+): Promise<Subject[]> {
   try {
-    const res = await api.get<Subject[]>(`/subjects`, { signal: options.signal })
+    const res = await api.get<Subject[]>(`/subjects`, { params: { filter }, signal: options.signal })
     return Array.isArray(res.data) ? res.data : []
   } catch (err) {
     if (axios.isAxiosError(err)) {
@@ -277,6 +351,31 @@ export async function updateSubject(
 export async function archiveSubject(subjectId: string): Promise<void> {
   try {
     await api.delete(`/subjects/${encodeURIComponent(subjectId)}`)
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function unarchiveSubject(subjectId: string): Promise<void> {
+  try {
+    await api.post(`/subjects/${encodeURIComponent(subjectId)}/unarchive`)
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function setSubjectStarred(subjectId: string, starred: boolean): Promise<Subject> {
+  try {
+    const res = await api.patch<Subject>(`/subjects/${encodeURIComponent(subjectId)}`, { starred })
+    return res.data
   } catch (err) {
     if (axios.isAxiosError(err)) {
       if ((err as AxiosError).code === "ERR_CANCELED") throw err

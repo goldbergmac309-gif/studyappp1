@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength, Matches } from 'class-validator';
+import { IsOptional, IsString, MaxLength, Matches, IsBoolean } from 'class-validator';
 
 export class UpdateSubjectDto {
   @IsOptional()
@@ -24,4 +24,8 @@ export class UpdateSubjectDto {
     message: 'Color must be a valid hex code.',
   })
   color?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  starred?: boolean;
 }

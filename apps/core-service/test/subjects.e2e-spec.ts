@@ -397,5 +397,134 @@ describe('Subjects (e2e)', () => {
       expect(row?.archivedAt).toBeTruthy();
     });
   });
+
+  describe('Filtering & State Transitions (recent/starred/archived)', () => {
+    let token: string;
+    beforeEach(async () => {
+      const signup = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'filters@test.com', password: 'password123' })
+        .expect(201);
+      token = signup.body.accessToken as string;
+    });
+
+    it('GET /subjects?filter=recent returns only items from last 14 days', async () => {
+      // Create two subjects
+      await request(app.getHttpServer())
+        .post('/subjects')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Fresh' })
+        .expect(201);
+
+      const old = await request(app.getHttpServer())
+        .post('/subjects')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Old' })
+        .expect(201);
+
+      // Manually backdate the second subject to 30 days ago
+      const prismaSubject = await prisma.subject.update({
+        where: { id: old.body.id as string },
+        data: { createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+      });
+      expect(prismaSubject.createdAt).toBeTruthy();
+
+      // recent -> should include Fresh, exclude Old
+      const res = await request(app.getHttpServer())
+        .get('/subjects')
+        .query({ filter: 'recent' })
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      const names = (res.body as Array<{ name: string }>).map((s) => s.name);
+      expect(names).toContain('Fresh');
+      expect(names).not.toContain('Old');
+    });
+
+    it('GET /subjects?filter=starred returns only starred subjects', async () => {
+      // Create two subjects
+      const a = await request(app.getHttpServer())
+        .post('/subjects')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Alpha' })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post('/subjects')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Beta' })
+        .expect(201);
+
+      // Star Alpha
+      await request(app.getHttpServer())
+        .patch(`/subjects/${a.body.id as string}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ starred: true })
+        .expect(200);
+
+      const res = await request(app.getHttpServer())
+        .get('/subjects')
+        .query({ filter: 'starred' })
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      const names = (res.body as Array<{ name: string }>).map((s) => s.name);
+      expect(names).toContain('Alpha');
+      expect(names).not.toContain('Beta');
+    });
+
+    it('GET /subjects?filter=archived returns only archived; POST /:id/unarchive moves it back', async () => {
+      // Create two subjects
+      const arch = await request(app.getHttpServer())
+        .post('/subjects')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Archive Me' })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post('/subjects')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Keep Me' })
+        .expect(201);
+
+      // Archive one
+      await request(app.getHttpServer())
+        .delete(`/subjects/${arch.body.id as string}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+
+      // archived -> only Archive Me
+      const archivedList = await request(app.getHttpServer())
+        .get('/subjects')
+        .query({ filter: 'archived' })
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const archNames = (archivedList.body as Array<{ name: string }>).map((s) => s.name);
+      expect(archNames).toContain('Archive Me');
+      expect(archNames).not.toContain('Keep Me');
+
+      // unarchive -> move back
+      await request(app.getHttpServer())
+        .post(`/subjects/${arch.body.id as string}/unarchive`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+
+      // archived -> now empty
+      const archivedAfter = await request(app.getHttpServer())
+        .get('/subjects')
+        .query({ filter: 'archived' })
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const namesAfter = (archivedAfter.body as Array<{ name: string }>).map((s) => s.name);
+      expect(namesAfter).not.toContain('Archive Me');
+
+      // all (default non-archived) should include both
+      const all = await request(app.getHttpServer())
+        .get('/subjects')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const allNames = (all.body as Array<{ name: string }>).map((s) => s.name);
+      expect(allNames).toEqual(
+        expect.arrayContaining(['Archive Me', 'Keep Me']),
+      );
+    });
+  });
 });
-2

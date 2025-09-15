@@ -75,7 +75,7 @@ const DocumentsTab = forwardRef<HTMLInputElement, DocumentsTabProps>(function Do
 
   return (
     <div className="space-y-4">
-      <Card>
+      <Card className="rounded-xl shadow-subtle">
         <CardHeader>
           <CardTitle>Upload</CardTitle>
           <CardDescription>Upload past exams, lecture notes, and PDFs.</CardDescription>
@@ -91,7 +91,7 @@ const DocumentsTab = forwardRef<HTMLInputElement, DocumentsTabProps>(function Do
               e.stopPropagation()
               onSelectFiles(e.dataTransfer.files)
             }}
-            className="group relative grid place-items-center rounded-md border border-dashed p-6 text-center hover:bg-muted/50"
+            className="group relative grid place-items-center rounded-xl border border-dashed p-6 text-center hover:bg-muted/50"
           >
             <div className="pointer-events-none flex flex-col items-center gap-2">
               <UploadCloud className="h-6 w-6 text-muted-foreground" />

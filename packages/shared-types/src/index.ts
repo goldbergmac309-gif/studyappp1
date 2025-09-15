@@ -38,7 +38,18 @@ export interface WidgetSize {
 // Flexible content container; concrete shape depends on widget type
 export type WidgetContent = any
 
-export type WidgetType = 'NOTES' | 'MIND_MAP' | 'FLASHCARDS'
+export type WidgetType =
+  | 'NOTES'
+  | 'MIND_MAP'
+  | 'FLASHCARDS'
+  | 'STICKY_NOTE'
+  | 'TASKS'
+  | 'COUNTDOWN'
+  | 'POMODORO'
+  | 'CALENDAR_MONTH'
+  | 'MUSIC_PLAYER'
+  | 'LINK_TILE'
+  | 'PROGRESS'
 
 export interface WidgetInstanceDto {
   id: string
@@ -46,6 +57,7 @@ export interface WidgetInstanceDto {
   position: WidgetPosition
   size: WidgetSize
   content: WidgetContent
+  style?: WidgetStyle
 }
 
 export interface UpdateWorkspaceLayoutDto {
@@ -55,4 +67,33 @@ export interface UpdateWorkspaceLayoutDto {
 export interface PersonaListItem {
   id: string
   name: string
+}
+
+// New: Widget styling and creation/update contracts
+export interface WidgetStyle {
+  accent?: string
+  bg?: string
+  elevation?: number
+  radius?: number
+  opacity?: number
+}
+
+export interface CreateWidgetInstanceDto {
+  type: WidgetType
+  position: WidgetPosition
+  size: WidgetSize
+  content?: WidgetContent
+  style?: WidgetStyle
+}
+
+export interface UpdateWidgetInstanceDto {
+  position?: WidgetPosition
+  size?: WidgetSize
+  content?: WidgetContent
+  style?: WidgetStyle
+}
+
+export interface BoardConfigDto {
+  background?: { type: 'color' | 'gradient' | 'image'; value: string }
+  grid?: { margin?: number; rowHeight?: number; snap?: boolean }
 }
