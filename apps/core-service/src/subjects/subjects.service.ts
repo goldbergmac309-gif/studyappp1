@@ -5,12 +5,13 @@ import {
 } from '@nestjs/common';
 import type { Subject, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { QueueService } from '../queue/queue.service';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
 
 @Injectable()
 export class SubjectsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private queue: QueueService) {}
 
   private subjectBaseSelect = {
     id: true,
@@ -130,5 +131,18 @@ export class SubjectsService {
       where: { id: subjectId },
       data: { archivedAt: null },
     });
+  }
+
+  async reindexSubject(userId: string, subjectId: string): Promise<{ status: 'queued' }> {
+    const subject = await this.prisma.subject.findFirst({
+      where: { id: subjectId, userId, archivedAt: null },
+      select: { id: true },
+    });
+    if (!subject) {
+      throw new NotFoundException('Subject not found');
+    }
+    // Publish idempotent reindex job
+    this.queue.publishReindexJob({ subjectId });
+    return { status: 'queued' } as const;
   }
 }

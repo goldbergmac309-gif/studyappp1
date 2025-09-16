@@ -10,3 +10,9 @@ requests-mock==1.11.0
 moto==5.0.9
 fastapi==0.115.6
 uvicorn==0.34.0
+
+# Sprint B: Brain-in-a-Box (kept optional in tests; engine may be mocked)
+sentence-transformers==2.7.0
+torch==2.3.1
+transformers==4.44.2
+langchain==0.2.14

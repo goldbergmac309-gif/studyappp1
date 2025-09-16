@@ -70,4 +70,10 @@ export class SubjectsController {
   async unarchive(@Param('id') id: string, @Request() req: AuthRequest) {
     await this.subjectsService.unarchiveSubject(req.user.id, id);
   }
+
+  @Post(':id/reindex')
+  @HttpCode(202)
+  async reindex(@Param('id') id: string, @Request() req: AuthRequest) {
+    return this.subjectsService.reindexSubject(req.user.id, id);
+  }
 }

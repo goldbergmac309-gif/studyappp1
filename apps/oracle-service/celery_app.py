@@ -29,7 +29,10 @@ app.conf.update(
     task_soft_time_limit=240,
     enable_utc=True,
     timezone="UTC",
-    imports=("workers.analysis_worker",),
+    imports=(
+        "workers.analysis_worker",
+        "workers.v2_reindex_worker",
+    ),
     # Ensure Celery tasks go to Celery's default queue; our worker will consume both
     task_default_queue="celery",
 )
@@ -49,6 +52,7 @@ class RawQueueBridge(bootsteps.ConsumerStep):
         super().__init__(consumer, **kwargs)
         self.app = consumer.app
         self.queue = Queue(settings.RABBITMQ_QUEUE_NAME, durable=True)
+        self.reindex_queue = Queue(settings.RABBITMQ_REINDEX_QUEUE_NAME, durable=True)
         logger.info(
             "RawQueueBridge initialized for queue=%s broker=%s",
             settings.RABBITMQ_QUEUE_NAME,
@@ -61,8 +65,14 @@ class RawQueueBridge(bootsteps.ConsumerStep):
                 channel,
                 queues=[self.queue],
                 callbacks=[self.on_message],
-                accept=["json"],  # accept JSON messages published by core-service
-            )
+                accept=["json"],
+            ),
+            Consumer(
+                channel,
+                queues=[self.reindex_queue],
+                callbacks=[self.on_reindex_message],
+                accept=["json"],
+            ),
         ]
 
     def on_message(self, body: Any, message: Any) -> None:
@@ -98,6 +108,40 @@ class RawQueueBridge(bootsteps.ConsumerStep):
             message.ack()  # drop poison pill
         except Exception:
             logger.exception("Failed to bridge message; acknowledging to avoid poison pill")
+            message.ack()
+
+    def on_reindex_message(self, body: Any, message: Any) -> None:
+        try:
+            payload: dict[str, Any]
+            if isinstance(body, (bytes, bytearray)):
+                body = body.decode("utf-8", errors="replace")
+            if isinstance(body, str):
+                payload = json.loads(body)
+            elif isinstance(body, dict):
+                payload = body
+            else:
+                raise ValueError(f"Unsupported message body type: {type(body)!r}")
+
+            # Validate payload shape for reindex: requires subjectId
+            subject_id = payload.get("subjectId")
+            if not isinstance(subject_id, str) or not subject_id:
+                raise ValueError("Invalid payload: missing or invalid 'subjectId'")
+
+            self.app.send_task(
+                "oracle.v2_reindex_subject",
+                args=[payload],
+                queue="celery",
+            )
+            message.ack()
+            logger.info(
+                "Bridged job to Celery task oracle.v2_reindex_subject (subjectId=%s)",
+                subject_id,
+            )
+        except json.JSONDecodeError as exc:
+            logger.error("JSON decode error for raw message (reindex): %s", exc)
+            message.ack()
+        except Exception:
+            logger.exception("Failed to bridge reindex message; acknowledging to avoid poison pill")
             message.ack()
 
 
