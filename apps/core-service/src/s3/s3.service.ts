@@ -55,6 +55,7 @@ export class S3Service {
    * If no bucket is configured, return null so callers can decide policy.
    */
   async checkHealth(): Promise<boolean | null> {
+    if (process.env.NODE_ENV === 'test') return null;
     if (!this.bucket) return null;
     try {
       const cmd = new HeadBucketCommand({ Bucket: this.bucket });

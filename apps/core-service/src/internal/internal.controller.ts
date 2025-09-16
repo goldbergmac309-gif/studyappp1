@@ -1,34 +1,31 @@
 import {
   Body,
   Controller,
-  Headers,
+  Get,
   NotFoundException,
   Param,
   Put,
-  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateAnalysisDto } from './dto/update-analysis.dto';
+import { InternalApiKeyGuard } from './guards/internal-api-key.guard';
+import { InternalService } from './internal.service';
+import { UpsertReindexDto } from './dto/upsert-reindex.dto';
 
+@UseGuards(InternalApiKeyGuard)
 @Controller('internal')
 export class InternalController {
   constructor(
-    private readonly config: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly internal: InternalService,
   ) {}
 
   @Put('documents/:documentId/analysis')
   async updateAnalysis(
     @Param('documentId') documentId: string,
     @Body() body: UpdateAnalysisDto,
-    @Headers('x-internal-api-key') apiKey: string | undefined,
   ) {
-    const appCfg = this.config.get<{ internalApiKey?: string }>('app');
-    if (!appCfg?.internalApiKey || apiKey !== appCfg.internalApiKey) {
-      throw new UnauthorizedException('Invalid internal API key');
-    }
-
     const doc = await this.prisma.document.findUnique({
       where: { id: documentId },
     });
@@ -57,5 +54,18 @@ export class InternalController {
     });
 
     return { status: 'ok', documentId };
+  }
+
+  @Get('subjects/:subjectId/documents')
+  async listSubjectDocuments(@Param('subjectId') subjectId: string) {
+    return this.internal.listSubjectDocuments(subjectId);
+  }
+
+  @Put('reindex/:subjectId/chunks')
+  async upsertReindex(
+    @Param('subjectId') subjectId: string,
+    @Body() body: UpsertReindexDto,
+  ) {
+    return this.internal.upsertChunksAndEmbeddings(subjectId, body);
   }
 }

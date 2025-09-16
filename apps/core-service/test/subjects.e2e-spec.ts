@@ -4,6 +4,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { QueueService } from '../src/queue/queue.service';
 
 describe('Subjects (e2e)', () => {
   let app: INestApplication;
@@ -525,6 +526,71 @@ describe('Subjects (e2e)', () => {
       expect(allNames).toEqual(
         expect.arrayContaining(['Archive Me', 'Keep Me']),
       );
+    });
+  });
+
+  // --- New: Reindex trigger E2E ---
+  describe('POST /subjects/:id/reindex (trigger pipeline)', () => {
+    it('should return 401 without JWT', async () => {
+      await request(app.getHttpServer())
+        .post('/subjects/any/reindex')
+        .expect(401);
+    });
+
+    it('should return 404 for subject not owned by requester', async () => {
+      // user A creates subject
+      const a = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'reidx_a@test.com', password: 'password123' })
+        .expect(201);
+      const tokenA = a.body.accessToken as string;
+      const created = await request(app.getHttpServer())
+        .post('/subjects')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ name: 'Index Me' })
+        .expect(201);
+      const subjectId = created.body.id as string;
+
+      // user B attempts to reindex A's subject -> 404
+      const b = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'reidx_b@test.com', password: 'password123' })
+        .expect(201);
+      const tokenB = b.body.accessToken as string;
+      await request(app.getHttpServer())
+        .post(`/subjects/${subjectId}/reindex`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .expect(404);
+    });
+
+    it('should return 202 and publish a reindex job for owned subject', async () => {
+      // Spy on queue service publish method
+      const queue = app.get(QueueService);
+      const spy = jest
+        .spyOn(queue, 'publishReindexJob')
+        .mockImplementation(() => undefined);
+
+      const user = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'reidx_ok@test.com', password: 'password123' })
+        .expect(201);
+      const token = user.body.accessToken as string;
+      const created = await request(app.getHttpServer())
+        .post('/subjects')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Owned' })
+        .expect(201);
+      const subjectId = created.body.id as string;
+
+      const res = await request(app.getHttpServer())
+        .post(`/subjects/${subjectId}/reindex`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(202);
+
+      expect(res.body).toEqual({ status: 'queued' });
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith({ subjectId });
+      spy.mockRestore();
     });
   });
 });
