@@ -15,25 +15,12 @@ async function clearClientState(page: Page) {
 
 async function createSubjectViaInlineOrModal(page: Page, name: string) {
   const inline = page.getByPlaceholder('e.g. Linear Algebra')
-  if (await inline.count()) {
-    await inline.first().fill(name)
-    await page.getByRole('button', { name: /^(?:\+\s*)?Create(?: Subject)?$/ }).click()
-    await expect(page.getByText(name)).toBeVisible()
-    return
-  }
-  // Fallback to modal tile
-  const addTile = page.getByText('+ Add space')
-  await addTile.click()
-  // Wait for dialog and fill step 1
-  const modal = page.getByRole('dialog')
-  await expect(modal).toBeVisible()
-  const modalInput = modal.getByPlaceholder('e.g. Linear Algebra')
-  await modalInput.fill(name)
-  // Step 1 -> Continue
-  await modal.getByRole('button', { name: /^Continue$/ }).click()
-  // Step 2 -> Create Subject
-  await modal.getByRole('button', { name: /^Create Subject$/ }).click()
-  await expect(page.getByText(name)).toBeVisible()
+  const form = page.locator('form').filter({ has: inline.first() }).first()
+  await expect(form).toBeVisible({ timeout: 30000 })
+  await inline.first().scrollIntoViewIfNeeded()
+  await inline.first().fill(name)
+  await form.locator('button[type="submit"]').click()
+  await expect(page.getByRole('link', { name: new RegExp(`${name}\\s+Open workspace`) })).toBeVisible()
 }
 
 test.describe('Client Gauntlet', () => {
@@ -83,13 +70,13 @@ test.describe('Client Gauntlet', () => {
     await createSubjectViaInlineOrModal(page, subjectName)
     await page.getByRole('link', { name: new RegExp(subjectName) }).first().click()
 
-    await page.getByRole('tab', { name: 'Documents' }).click()
+    await page.getByRole('tab', { name: /^Resources$/ }).click()
     const fileInput = page.locator('input[type="file"]')
     await fileInput.setInputFiles('e2e/fixtures/sample.pdf')
 
-    // Wait for the new document row to appear
-    const row = page.locator('div.flex.border, div[role="row"]').filter({ hasText: 'sample.pdf' }).first()
-    await expect(row).toBeVisible()
+    // Wait for the new document row to appear (list items are buttons)
+    const row = page.getByRole('button', { name: /sample\.pdf/ }).first()
+    await expect(row).toBeVisible({ timeout: 60_000 })
 
     // Wait up to 90s for the status to become COMPLETED
     await expect(row.getByText('COMPLETED')).toBeVisible({ timeout: 90_000 })

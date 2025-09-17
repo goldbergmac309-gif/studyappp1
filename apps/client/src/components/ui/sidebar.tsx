@@ -55,7 +55,7 @@ export const SidebarProvider = ({ children, defaultOpen = true }: { children: Re
   // On mobile, keep sidebar closed by default and when switching to mobile
   React.useEffect(() => {
     if (isMobile && open) setOpen(false)
-  }, [isMobile])
+  }, [isMobile, open])
 
   const toggleSidebar = React.useCallback(() => setOpen((v) => !v), [])
   const state: SidebarState = open ? "expanded" : "collapsed"

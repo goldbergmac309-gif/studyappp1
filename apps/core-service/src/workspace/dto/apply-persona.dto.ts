@@ -1,7 +1,7 @@
-import { IsNotEmpty, IsString } from 'class-validator'
+import { IsNotEmpty, IsString } from 'class-validator';
 
 export class ApplyPersonaDto {
   @IsString()
   @IsNotEmpty()
-  personaId!: string
+  personaId!: string;
 }

@@ -1,43 +1,50 @@
-import { IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Min, ValidateNested } from 'class-validator'
-import { Type } from 'class-transformer'
+import {
+  IsArray,
+  IsInt,
+  IsNotEmpty,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 class PositionDto {
   @IsInt()
   @Min(0)
-  x!: number
+  x!: number;
 
   @IsInt()
   @Min(0)
-  y!: number
+  y!: number;
 }
 
 class SizeDto {
   @IsInt()
   @Min(1)
-  width!: number
+  width!: number;
 
   @IsInt()
   @Min(1)
-  height!: number
+  height!: number;
 }
 
 class WidgetLayoutUpdateDto {
   @IsString()
   @IsNotEmpty()
-  id!: string
+  id!: string;
 
   @ValidateNested()
   @Type(() => PositionDto)
-  position!: PositionDto
+  position!: PositionDto;
 
   @ValidateNested()
   @Type(() => SizeDto)
-  size!: SizeDto
+  size!: SizeDto;
 }
 
 export class UpdateWorkspaceLayoutDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => WidgetLayoutUpdateDto)
-  widgets!: WidgetLayoutUpdateDto[]
+  widgets!: WidgetLayoutUpdateDto[];
 }

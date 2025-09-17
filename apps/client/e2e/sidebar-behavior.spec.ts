@@ -11,6 +11,7 @@ async function signUp(page: Page, email: string, password: string) {
   await page.getByPlaceholder('Your password').fill(password)
   await page.getByPlaceholder('Confirm password').fill(password)
   await page.getByRole('button', { name: 'Create account' }).click()
+  await expect(page.getByText('Account created')).toBeVisible()
   await expect(page).toHaveURL(/\/dashboard$/)
 }
 
@@ -23,18 +24,20 @@ test.describe('Sidebar collapse and tooltips', () => {
 
     await signUp(page, email, password)
 
-    // Initially expanded: brand shows full text
-    await expect(page.getByText('Synapse OS')).toBeVisible()
+    // Initially expanded: sidebar brand shows full text 'Synapse'
+    const sidebar = page.locator('nav')
+    await expect(sidebar).toBeVisible()
+    await expect(sidebar.getByText('Synapse')).toBeVisible()
 
     // Collapse via header trigger (scope to header to avoid rail ambiguity)
     await page.locator('header').getByRole('button', { name: 'Toggle Sidebar' }).click()
 
-    // Collapsed: brand reduces to single letter 'S' and full text is hidden
-    await expect(page.getByText('Synapse OS')).toHaveCount(0)
-    await expect(page.getByText(/^S$/)).toBeVisible()
+    // Collapsed: sidebar brand reduces to single letter 'S' and full text is hidden in sidebar
+    await expect(sidebar.getByText('Synapse')).toHaveCount(0)
+    await expect(sidebar.getByText(/^S$/)).toBeVisible()
 
     // Hover the Dashboard nav icon and assert tooltip appears
-    const dashboardLink = page.getByRole('link', { name: 'Dashboard' })
+    const dashboardLink = sidebar.getByRole('link', { name: 'Dashboard' })
     await dashboardLink.hover()
     // Tooltip may not always have a name; check generic tooltip visibility and text
     const tooltip = page.getByRole('tooltip')

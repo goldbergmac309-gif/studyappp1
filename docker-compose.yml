@@ -1,0 +1,102 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: studyapp_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5544:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  minio:
+    image: minio/minio:latest
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  oracle-embed:
+    build:
+      context: ./apps/oracle-service
+    command: bash -lc "python -m uvicorn app.embed_server:app --host 0.0.0.0 --port 8000"
+    environment:
+      ENGINE_MODEL_NAME: stub-miniLM
+      ENGINE_DIM: 384
+    ports:
+      - "8000:8000"
+    depends_on: []
+
+  oracle-worker:
+    build:
+      context: ./apps/oracle-service
+    command: bash -lc "celery -A celery_app.app worker -l info"
+    environment:
+      CORE_SERVICE_URL: http://core-service:3000
+      INTERNAL_API_KEY: dev-internal-key
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
+      RABBITMQ_QUEUE_NAME: document_processing_jobs
+      RABBITMQ_REINDEX_QUEUE_NAME: v2_reindexing_jobs
+      AWS_S3_ENDPOINT: http://minio:9000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_S3_BUCKET: studyapp-docs
+      AWS_S3_FORCE_PATH_STYLE: "true"
+      ENGINE_VERSION: oracle-v2
+      ENGINE_MODEL_NAME: stub-miniLM
+      ENGINE_DIM: 384
+      LOG_LEVEL: INFO
+      S3_BUCKET: studyapp-docs
+    depends_on:
+      - rabbitmq
+      - minio
+      - postgres
+
+  core-service:
+    build:
+      context: .
+      dockerfile: apps/core-service/Dockerfile
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      JWT_SECRET: dev-jwt
+      INTERNAL_API_KEY: dev-internal-key
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/studyapp_dev?schema=public
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
+      RABBITMQ_QUEUE_NAME: document_processing_jobs
+      RABBITMQ_REINDEX_QUEUE_NAME: v2_reindexing_jobs
+      AWS_REGION: us-east-1
+      AWS_S3_BUCKET: studyapp-docs
+      AWS_S3_ENDPOINT: http://minio:9000
+      AWS_S3_FORCE_PATH_STYLE: "true"
+      ORACLE_EMBED_URL: http://oracle-embed:8000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+    ports:
+      - "3001:3000"
+    depends_on:
+      - postgres
+      - rabbitmq
+      - minio
+      - oracle-embed
+
+volumes:
+  pgdata:
+  minio-data:
