@@ -73,6 +73,10 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     s3Key: string;
     userId: string;
   }): void {
+    // If RMQ is not configured, gracefully no-op (used in tests/CI)
+    if (!this.url) {
+      return;
+    }
     if (!this.channel) {
       throw new Error('RabbitMQ channel not initialized');
     }
@@ -108,6 +112,10 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   publishReindexJob(payload: { subjectId: string }): void {
+    // If RMQ is not configured, gracefully no-op (used in tests/CI)
+    if (!this.url) {
+      return;
+    }
     if (!this.channel) {
       throw new Error('RabbitMQ channel not initialized');
     }

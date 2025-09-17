@@ -12,6 +12,7 @@ import { UpdateAnalysisDto } from './dto/update-analysis.dto';
 import { InternalApiKeyGuard } from './guards/internal-api-key.guard';
 import { InternalService } from './internal.service';
 import { UpsertReindexDto } from './dto/upsert-reindex.dto';
+import { UpsertTopicsDto } from './dto/upsert-topics.dto';
 
 @UseGuards(InternalApiKeyGuard)
 @Controller('internal')
@@ -61,11 +62,24 @@ export class InternalController {
     return this.internal.listSubjectDocuments(subjectId);
   }
 
+  @Get('subjects/:subjectId/chunks')
+  async listSubjectChunks(@Param('subjectId') subjectId: string) {
+    return await this.internal.listSubjectChunks(subjectId);
+  }
+
   @Put('reindex/:subjectId/chunks')
   async upsertReindex(
     @Param('subjectId') subjectId: string,
     @Body() body: UpsertReindexDto,
   ) {
-    return this.internal.upsertChunksAndEmbeddings(subjectId, body);
+    return await this.internal.upsertChunksAndEmbeddings(subjectId, body);
+  }
+
+  @Put('subjects/:subjectId/topics')
+  async upsertTopics(
+    @Param('subjectId') subjectId: string,
+    @Body() body: UpsertTopicsDto,
+  ) {
+    return await this.internal.upsertSubjectTopics(subjectId, body);
   }
 }

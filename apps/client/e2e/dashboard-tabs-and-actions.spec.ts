@@ -16,20 +16,25 @@ async function signUpAndGotoDashboard(page: Page, email: string, password: strin
 
 async function createSubject(page: Page, name: string) {
   const inline = page.getByPlaceholder('e.g. Linear Algebra')
-  if (await inline.count()) {
-    await expect(inline.first()).toBeVisible()
+  // Prefer the inline create form; wait for it to be visible to avoid racing
+  try {
+    await expect(inline.first()).toBeVisible({ timeout: 15000 })
     await inline.first().fill(name)
     await page.getByRole('button', { name: /^(?:\+\s*)?Create(?: Subject)?$/ }).click()
     await expect(page.getByText(name)).toBeVisible()
     return
+  } catch {
+    // Fallback to modal tile (shown when there are already subjects)
+    const addTile = page.getByText('+ Add space')
+    await addTile.scrollIntoViewIfNeeded()
+    await addTile.click()
+    const modal = page.getByRole('dialog')
+    await expect(modal).toBeVisible()
+    const modalInput = modal.getByPlaceholder('e.g. Linear Algebra')
+    await modalInput.fill(name)
+    await modal.getByRole('button', { name: /^Create Subject$/ }).click()
+    await expect(page.getByText(name)).toBeVisible()
   }
-  // Fallback to modal tile
-  const addTile = page.getByText('+ Add space')
-  await addTile.click()
-  const modalInput = page.getByPlaceholder('e.g. Linear Algebra')
-  await modalInput.fill(name)
-  await page.getByRole('button', { name: /^Create Subject$/ }).click()
-  await expect(page.getByText(name)).toBeVisible()
 }
 
 async function openSubjectMenu(page: Page, subjectName: string) {
@@ -67,25 +72,25 @@ test.describe('Dashboard Tabs & Card Actions', () => {
     await page.getByRole('menuitem', { name: 'Archive' }).click()
 
     // Starred tab -> only A
-    await page.getByRole('button', { name: 'Starred' }).click()
+    await page.getByRole('button', { name: /^Starred$/ }).click()
     await expect(page.getByText(A)).toBeVisible()
     await expect(page.getByText(B)).toHaveCount(0)
     await expect(page.getByText(C)).toHaveCount(0)
 
     // Archived tab -> only B
-    await page.getByRole('button', { name: 'Archived' }).click()
+    await page.getByRole('button', { name: /^Archived$/ }).click()
     await expect(page.getByText(B)).toBeVisible()
     await expect(page.getByText(A)).toHaveCount(0)
     await expect(page.getByText(C)).toHaveCount(0)
 
     // All tab -> A and C (non-archived)
-    await page.getByRole('button', { name: 'All' }).click()
+    await page.getByRole('button', { name: /^All$/ }).click()
     await expect(page.getByText(A)).toBeVisible()
     await expect(page.getByText(C)).toBeVisible()
     await expect(page.getByText(B)).toHaveCount(0)
 
     // Recent tab -> A and C (non-archived, created now)
-    await page.getByRole('button', { name: 'Recent' }).click()
+    await page.getByRole('button', { name: /^Recent$/ }).click()
     await expect(page.getByText(A)).toBeVisible()
     await expect(page.getByText(C)).toBeVisible()
     await expect(page.getByText(B)).toHaveCount(0)

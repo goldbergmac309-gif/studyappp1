@@ -32,6 +32,7 @@ app.conf.update(
     imports=(
         "workers.analysis_worker",
         "workers.v2_reindex_worker",
+        "workers.topics_worker",
     ),
     # Ensure Celery tasks go to Celery's default queue; our worker will consume both
     task_default_queue="celery",

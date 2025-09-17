@@ -1,5 +1,16 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Min, ValidateNested } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
 export class ReindexChunkDto {
   @IsInt()

@@ -39,6 +39,7 @@ model Subject {
   
   // Back-relation
   documents  Document[]
+  topics     SubjectTopics?
 
   // Workspace extensions (Epoch III)
   blueprintId  String?
@@ -160,4 +161,14 @@ enum WidgetType {
   MUSIC_PLAYER
   LINK_TILE
   PROGRESS
+}
+
+// Subject-level conceptual topics (Topic Heat Map V2)
+model SubjectTopics {
+  subjectId     String   @id
+  engineVersion String
+  topics        Json
+  updatedAt     DateTime @updatedAt
+
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 }

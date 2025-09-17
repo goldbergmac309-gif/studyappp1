@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SubjectsService } from './subjects.service';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
+import { SearchDto } from './dto/search.dto';
 
 type AuthRequest = ExpressRequest & { user: { id: string; email: string } };
 
@@ -56,7 +57,11 @@ export class SubjectsController {
     @Body() updateSubjectDto: UpdateSubjectDto,
     @Request() req: AuthRequest,
   ) {
-    return this.subjectsService.updateSubject(req.user.id, id, updateSubjectDto);
+    return this.subjectsService.updateSubject(
+      req.user.id,
+      id,
+      updateSubjectDto,
+    );
   }
 
   @Delete(':id')
@@ -74,6 +79,24 @@ export class SubjectsController {
   @Post(':id/reindex')
   @HttpCode(202)
   async reindex(@Param('id') id: string, @Request() req: AuthRequest) {
-    return this.subjectsService.reindexSubject(req.user.id, id);
+    return await this.subjectsService.reindexSubject(req.user.id, id);
+  }
+
+  @Get(':id/search')
+  async search(
+    @Param('id') id: string,
+    @Request() req: AuthRequest,
+    @Query() query: SearchDto,
+  ) {
+    return await this.subjectsService.searchSubjectChunks(
+      req.user.id,
+      id,
+      query,
+    );
+  }
+
+  @Get(':id/topics')
+  async getTopics(@Param('id') id: string, @Request() req: AuthRequest) {
+    return await this.subjectsService.getSubjectTopics(req.user.id, id);
   }
 }

@@ -1,13 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { RotateCw, AlertCircle, Clock, Star, Grid, Archive } from "lucide-react"
+import { useEffect, useMemo, useState, useCallback } from "react"
+import { AlertCircle, Clock, Star, Grid, Archive } from "lucide-react"
 import { isAxiosError } from "axios"
 
 import { listSubjects } from "@/lib/api"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -17,38 +16,37 @@ import SubjectCard from "@/app/(dashboard)/dashboard/_components/subject-card"
 import QuickActions from "@/app/(dashboard)/dashboard/_components/quick-actions"
 import LearningPrompt from "@/app/(dashboard)/dashboard/_components/learning-prompt"
 import TopicsExplorer from "@/app/(dashboard)/dashboard/_components/topics-explorer"
-import Link from "next/link"
 
 type Subject = { id: string; name: string }
-type ApiError = { message?: string }
-
 export default function DashboardPage() {
   const [subjects, setSubjects] = useState<Subject[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState<"recent" | "starred" | "all" | "archived">("recent")
 
-  const hasSubjects = useMemo(() => (subjects?.length ?? 0) > 0, [subjects])
+  useMemo(() => (subjects?.length ?? 0) > 0, [subjects])
 
-  async function fetchSubjects() {
+  const fetchSubjects = useCallback(async () => {
     try {
       setError(null)
-      setRefreshing(true)
       const data = await listSubjects(activeTab)
       setSubjects(data)
     } catch (e: unknown) {
-      const err = e as ApiError & { message?: string }
-      setError(err?.message || (isAxiosError(err) ? (err.response?.data as any)?.message || err.message : 'Failed to load'))
+      if (isAxiosError(e)) {
+        const data = e.response?.data as unknown
+        const msg = typeof data === 'object' && data && typeof (data as Record<string, unknown>).message === 'string'
+          ? String((data as Record<string, unknown>).message)
+          : e.message
+        setError(msg)
+      } else {
+        setError(e instanceof Error ? e.message : 'Failed to load')
+      }
     } finally {
       setLoading(false)
-      setRefreshing(false)
     }
-  }
-
-  useEffect(() => {
-    fetchSubjects()
   }, [activeTab])
+
+  useEffect(() => { void fetchSubjects() }, [fetchSubjects])
 
   return (
     <div className="space-y-8">
@@ -69,9 +67,7 @@ export default function DashboardPage() {
               <TabButton active={activeTab === "all"} onClick={() => setActiveTab("all")} icon={<Grid className="h-3.5 w-3.5" />} label="All" />
               <TabButton active={activeTab === "archived"} onClick={() => setActiveTab("archived")} icon={<Archive className="h-3.5 w-3.5" />} label="Archived" />
             </div>
-            <Button variant="ghost" size="sm" className="text-xs h-8 gap-1" onClick={() => setActiveTab('all')}>
-              View all
-            </Button>
+            <Button variant="ghost" size="sm" className="text-xs h-8 gap-1" onClick={() => setActiveTab('all')}>View all</Button>
           </div>
         </div>
 

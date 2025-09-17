@@ -97,3 +97,29 @@ export interface BoardConfigDto {
   background?: { type: 'color' | 'gradient' | 'image'; value: string }
   grid?: { margin?: number; rowHeight?: number; snap?: boolean }
 }
+
+// Epoch II/V2: Semantic Search contracts
+export interface SemanticSearchHit {
+  documentId: string
+  documentFilename: string
+  chunkIndex: number
+  snippet: string
+  score: number
+}
+
+export type SemanticSearchResponse = SemanticSearchHit[]
+
+// Epoch II/V2: Conceptual Topics (Topic Heat Map V2)
+export interface TopicTerm {
+  term: string
+  score: number
+}
+
+export interface SubjectTopic {
+  label: string
+  weight: number
+  terms: TopicTerm[]
+  documentIds?: string[]
+}
+
+export type SubjectTopicsResponse = SubjectTopic[]

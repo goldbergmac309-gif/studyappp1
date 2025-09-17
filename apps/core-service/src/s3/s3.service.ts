@@ -4,12 +4,14 @@ import {
   S3Client,
   PutObjectCommand,
   HeadBucketCommand,
+  CreateBucketCommand,
 } from '@aws-sdk/client-s3';
 
 @Injectable()
 export class S3Service {
   private readonly client: S3Client;
   private readonly bucket: string;
+  private bucketReady = false;
 
   constructor(private readonly config: ConfigService) {
     type AppConfig = {
@@ -41,6 +43,11 @@ export class S3Service {
     if (!this.bucket) {
       throw new Error('S3 bucket is not configured (AWS_S3_BUCKET)');
     }
+    // Ensure bucket exists (useful for local MinIO in tests/dev)
+    if (!this.bucketReady) {
+      await this.ensureBucket();
+      this.bucketReady = true;
+    }
     const cmd = new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
@@ -48,6 +55,18 @@ export class S3Service {
       ContentType: contentType || 'application/octet-stream',
     });
     await this.client.send(cmd);
+  }
+
+  private async ensureBucket(): Promise<void> {
+    try {
+      const head = new HeadBucketCommand({ Bucket: this.bucket });
+      await this.client.send(head);
+      return;
+    } catch {
+      // attempt to create
+      const create = new CreateBucketCommand({ Bucket: this.bucket });
+      await this.client.send(create);
+    }
   }
 
   /**

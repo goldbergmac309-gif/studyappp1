@@ -71,32 +71,32 @@ describe('Documents (e2e)', () => {
     it('requires JWT', async () => {
       await request(app.getHttpServer())
         .post('/subjects/any/documents/any/reprocess')
-        .expect(401)
-    })
+        .expect(401);
+    });
 
     it('enforces ownership and document existence (404)', async () => {
-      const tokenA = await signup('reproc_a@test.com')
-      const tokenB = await signup('reproc_b@test.com')
+      const tokenA = await signup('reproc_a@test.com');
+      const tokenB = await signup('reproc_b@test.com');
 
-      const subjectA = await createSubject(tokenA, 'DSP')
+      const subjectA = await createSubject(tokenA, 'DSP');
 
       // B tries to reprocess A's (nonexistent for B) -> 404
       await request(app.getHttpServer())
         .post(`/subjects/${subjectA}/documents/nonexistent/reprocess`)
         .set('Authorization', `Bearer ${tokenB}`)
-        .expect(404)
-    })
+        .expect(404);
+    });
 
     it('happy path: FAILED -> reprocess -> QUEUED and queue.publish called', async () => {
-      const email = 'reproc_ok@test.com'
-      const token = await signup(email)
-      const subjectId = await createSubject(token, 'Numerical')
+      const email = 'reproc_ok@test.com';
+      const token = await signup(email);
+      const subjectId = await createSubject(token, 'Numerical');
 
-      const me = await prisma.user.findFirst({ where: { email } })
-      expect(me).toBeTruthy()
+      const me = await prisma.user.findFirst({ where: { email } });
+      expect(me).toBeTruthy();
 
       // Seed a FAILED document for this subject
-      const docId = cuid()
+      const docId = cuid();
       const seeded = await prisma.document.create({
         data: {
           id: docId,
@@ -105,29 +105,31 @@ describe('Documents (e2e)', () => {
           status: Status.FAILED,
           subjectId,
         },
-      })
-      expect(seeded.id).toBe(docId)
+      });
+      expect(seeded.id).toBe(docId);
 
       const res = await request(app.getHttpServer())
         .post(`/subjects/${subjectId}/documents/${docId}/reprocess`)
         .set('Authorization', `Bearer ${token}`)
-        .expect(200)
+        .expect(200);
 
-      expect(res.body).toHaveProperty('id', docId)
-      expect(res.body).toHaveProperty('status', 'QUEUED')
+      expect(res.body).toHaveProperty('id', docId);
+      expect(res.body).toHaveProperty('status', 'QUEUED');
 
       // Queue publish should be called
-      expect(queueMock.publishDocumentJob).toHaveBeenCalledTimes(1)
+      expect(queueMock.publishDocumentJob).toHaveBeenCalledTimes(1);
 
-      const updated = await prisma.document.findUnique({ where: { id: docId } })
-      expect(updated?.status).toBe(Status.QUEUED)
-    })
+      const updated = await prisma.document.findUnique({
+        where: { id: docId },
+      });
+      expect(updated?.status).toBe(Status.QUEUED);
+    });
 
     it('returns 409 when document is not in a reprocessable state', async () => {
-      const token = await signup('reproc_conflict@test.com')
-      const subjectId = await createSubject(token, 'OS')
+      const token = await signup('reproc_conflict@test.com');
+      const subjectId = await createSubject(token, 'OS');
 
-      const docId = cuid()
+      const docId = cuid();
       await prisma.document.create({
         data: {
           id: docId,
@@ -136,14 +138,14 @@ describe('Documents (e2e)', () => {
           status: Status.QUEUED,
           subjectId,
         },
-      })
+      });
 
       await request(app.getHttpServer())
         .post(`/subjects/${subjectId}/documents/${docId}/reprocess`)
         .set('Authorization', `Bearer ${token}`)
-        .expect(409)
-    })
-  })
+        .expect(409);
+    });
+  });
 
   it('GET /subjects/:id/insights requires JWT', async () => {
     await request(app.getHttpServer())
