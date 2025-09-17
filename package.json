@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "pnpm -r run lint",
+    "e2e:client": "pnpm --filter @studyapp/client exec playwright test",
+    "e2e:client:ui": "pnpm --filter @studyapp/client exec playwright test --ui"
   },
   "keywords": [],
   "author": "",

@@ -498,7 +498,9 @@ describe('Subjects (e2e)', () => {
         .query({ filter: 'archived' })
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
-      const archNames = (archivedList.body as Array<{ name: string }>).map((s) => s.name);
+      const archNames = (archivedList.body as Array<{ name: string }>).map(
+        (s) => s.name,
+      );
       expect(archNames).toContain('Archive Me');
       expect(archNames).not.toContain('Keep Me');
 
@@ -514,7 +516,9 @@ describe('Subjects (e2e)', () => {
         .query({ filter: 'archived' })
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
-      const namesAfter = (archivedAfter.body as Array<{ name: string }>).map((s) => s.name);
+      const namesAfter = (archivedAfter.body as Array<{ name: string }>).map(
+        (s) => s.name,
+      );
       expect(namesAfter).not.toContain('Archive Me');
 
       // all (default non-archived) should include both

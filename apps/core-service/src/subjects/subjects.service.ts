@@ -8,10 +8,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { QueueService } from '../queue/queue.service';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
+import { SearchDto } from './dto/search.dto';
+import { EmbeddingService } from './embedding.service';
 
 @Injectable()
 export class SubjectsService {
-  constructor(private prisma: PrismaService, private queue: QueueService) {}
+  constructor(
+    private prisma: PrismaService,
+    private queue: QueueService,
+    private embed: EmbeddingService,
+  ) {}
 
   private subjectBaseSelect = {
     id: true,
@@ -133,7 +139,10 @@ export class SubjectsService {
     });
   }
 
-  async reindexSubject(userId: string, subjectId: string): Promise<{ status: 'queued' }> {
+  async reindexSubject(
+    userId: string,
+    subjectId: string,
+  ): Promise<{ status: 'queued' }> {
     const subject = await this.prisma.subject.findFirst({
       where: { id: subjectId, userId, archivedAt: null },
       select: { id: true },
@@ -144,5 +153,133 @@ export class SubjectsService {
     // Publish idempotent reindex job
     this.queue.publishReindexJob({ subjectId });
     return { status: 'queued' } as const;
+  }
+
+  async searchSubjectChunks(
+    userId: string,
+    subjectId: string,
+    dto: SearchDto,
+  ): Promise<
+    Array<{
+      documentId: string;
+      documentFilename: string;
+      chunkIndex: number;
+      snippet: string;
+      score: number;
+    }>
+  > {
+    // Ownership check
+    const subject = await this.prisma.subject.findFirst({
+      where: { id: subjectId, userId, archivedAt: null },
+      select: { id: true },
+    });
+    if (!subject) throw new NotFoundException('Subject not found');
+
+    const q = (dto.query || '').trim();
+    if (q.length < 2)
+      throw new BadRequestException('query must be at least 2 characters');
+    const k = Math.min(Math.max(dto.k ?? 20, 1), 100);
+    // Interpret threshold as cosine similarity and convert to cosine distance
+    // In pgvector, <=> is cosine distance: d = 1 - cosine_similarity in [0,2]
+    // We bound similarity to [0,1] (ignore negative similarities in filtering)
+    const threshold = dto.threshold ?? 0.25; // cosine similarity
+    const sim = Math.min(Math.max(threshold, 0), 1);
+    const maxDist = 1 - sim;
+
+    // Get query embedding
+    const e = await this.embed.embedText(q);
+    if (!Array.isArray(e.embedding) || e.embedding.length !== 384) {
+      throw new BadRequestException('Invalid query embedding dimension');
+    }
+    const vectorString = `[${e.embedding.join(',')}]`;
+
+    // Execute pgvector similarity with parameterized vector cast
+    let rows: Array<{
+      documentId: string;
+      documentFilename: string;
+      chunkIndex: number;
+      snippet: string;
+      score: number;
+    }> = [];
+    if (dto.threshold === undefined) {
+      rows = await this.prisma.$queryRaw<
+        Array<{
+          documentId: string;
+          documentFilename: string;
+          chunkIndex: number;
+          snippet: string;
+          score: number;
+        }>
+      >`
+        SELECT d."id" AS "documentId",
+               d."filename" AS "documentFilename",
+               c."index" AS "chunkIndex",
+               c."text" AS "snippet",
+               1 - (e."embedding" <=> (CAST(${vectorString} AS text))::vector) AS "score"
+        FROM "Embedding" e
+        JOIN "DocumentChunk" c ON e."chunkId" = c."id"
+        JOIN "Document" d ON c."documentId" = d."id"
+        WHERE d."subjectId" = ${subjectId}
+        ORDER BY e."embedding" <=> (CAST(${vectorString} AS text))::vector ASC
+        LIMIT ${k}
+      `;
+    } else {
+      rows = await this.prisma.$queryRaw<
+        Array<{
+          documentId: string;
+          documentFilename: string;
+          chunkIndex: number;
+          snippet: string;
+          score: number;
+        }>
+      >`
+        SELECT d."id" AS "documentId",
+               d."filename" AS "documentFilename",
+               c."index" AS "chunkIndex",
+               c."text" AS "snippet",
+               1 - (e."embedding" <=> (CAST(${vectorString} AS text))::vector) AS "score"
+        FROM "Embedding" e
+        JOIN "DocumentChunk" c ON e."chunkId" = c."id"
+        JOIN "Document" d ON c."documentId" = d."id"
+        WHERE d."subjectId" = ${subjectId}
+          AND (e."embedding" <=> (CAST(${vectorString} AS text))::vector) <= ${maxDist}
+        ORDER BY e."embedding" <=> (CAST(${vectorString} AS text))::vector ASC
+        LIMIT ${k}
+      `;
+    }
+
+    return rows;
+  }
+
+  async getSubjectTopics(
+    userId: string,
+    subjectId: string,
+  ): Promise<
+    Array<{
+      label: string;
+      weight: number;
+      terms: Array<{ term: string; score: number }>;
+      documentIds?: string[];
+    }>
+  > {
+    const subject = await this.prisma.subject.findFirst({
+      where: { id: subjectId, userId },
+      select: { id: true },
+    });
+    if (!subject) throw new NotFoundException('Subject not found');
+
+    const topics = await this.prisma.subjectTopics.findUnique({
+      where: { subjectId },
+      select: { topics: true },
+    });
+    if (!topics) {
+      throw new NotFoundException('Topics not found');
+    }
+    return topics.topics as unknown as Array<{
+      label: string;
+      weight: number;
+      terms: Array<{ term: string; score: number }>;
+      documentIds?: string[];
+    }>;
   }
 }

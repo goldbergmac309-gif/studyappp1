@@ -19,10 +19,10 @@ export function useIsMobile(breakpoint: number = 768) {
       return () => mql.removeEventListener("change", handler as (e: MediaQueryListEvent) => void)
     } else {
       // Safari
-      // @ts-ignore
+      // @ts-expect-error: Older Safari supports addListener/removeListener
       mql.addListener(handler)
       return () => {
-        // @ts-ignore
+        // @ts-expect-error: Older Safari supports addListener/removeListener
         mql.removeListener(handler)
       }
     }

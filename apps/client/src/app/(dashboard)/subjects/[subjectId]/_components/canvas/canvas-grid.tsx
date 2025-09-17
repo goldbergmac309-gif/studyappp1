@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import dynamic from "next/dynamic"
-import type { Layout, Layouts } from "react-grid-layout"
+import type { Layout, Layouts, ResponsiveProps } from "react-grid-layout"
 import "react-grid-layout/css/styles.css"
 import "react-resizable/css/styles.css"
 import { NotesWidget } from "../widgets/notes-widget"
@@ -18,34 +18,61 @@ import { ProgressWidget } from "../widgets/progress-widget"
 import { getSubjectWorkspace, patchWorkspaceLayout, addWidget, deleteWidget, getBoardConfig, patchBoardConfig, updateWidget } from "@/lib/api"
 import type { WidgetInstanceDto, UpdateWorkspaceLayoutDto, BoardConfigDto } from "@studyapp/shared-types"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Trash2, Copy } from "lucide-react"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 
 // react-grid-layout has SSR issues; load it dynamically on client
-const ResponsiveGridLayout = dynamic<any>(
-  () => import("react-grid-layout").then((m: any) => m.WidthProvider(m.Responsive)),
+const ResponsiveGridLayout = dynamic<ResponsiveProps>(
+  async () => {
+    const m = await import("react-grid-layout")
+    return m.WidthProvider(m.Responsive) as unknown as React.ComponentType<ResponsiveProps>
+  },
   { ssr: false },
 )
+
+function readContentString(content: unknown, key: string, fallback = ""): string {
+  if (content && typeof content === "object") {
+    const v = (content as Record<string, unknown>)[key]
+    if (typeof v === "string") return v
+  }
+  return fallback
+}
+
+function readContentNumber(content: unknown, key: string, fallback = 0): number {
+  if (content && typeof content === "object") {
+    const v = (content as Record<string, unknown>)[key]
+    if (typeof v === "number" && Number.isFinite(v)) return v
+  }
+  return fallback
+}
+
+function readContentArray<T = unknown>(content: unknown, key: string): T[] {
+  if (content && typeof content === "object") {
+    const v = (content as Record<string, unknown>)[key]
+    if (Array.isArray(v)) return v as T[]
+  }
+  return []
+}
 
 function WidgetView({ w, subjectId, autoFocusId }: { w: WidgetInstanceDto; subjectId: string; autoFocusId?: string | null }) {
   switch (w.type) {
     case "NOTES":
       return (
-        <NotesWidget initialText={typeof w.content?.text === "string" ? String(w.content.text) : ""} />
+        <NotesWidget initialText={readContentString(w.content as unknown, "text", "")} />
       )
     case "MIND_MAP":
       return (
-        <MindMapWidget nodesCount={Array.isArray(w.content?.nodes) ? w.content.nodes.length : undefined} />
+        <MindMapWidget nodesCount={readContentArray(w.content as unknown, "nodes").length || undefined} />
       )
     case "STICKY_NOTE":
       return (
         <StickyNoteWidget
           widgetId={w.id}
           subjectId={subjectId}
-          color={typeof (w as any)?.style?.bg === 'string' ? (w as any).style.bg : undefined}
-          initialText={typeof (w as any)?.content?.text === 'string' ? (w as any).content.text : ''}
+          color={typeof w.style?.bg === 'string' ? w.style.bg : undefined}
+          initialText={readContentString(w.content as unknown, 'text', '')}
           autoFocus={autoFocusId === w.id}
         />
       )
@@ -54,7 +81,7 @@ function WidgetView({ w, subjectId, autoFocusId }: { w: WidgetInstanceDto; subje
         <TasksWidget
           widgetId={w.id}
           subjectId={subjectId}
-          initialItems={Array.isArray((w as any)?.content?.items) ? (w as any).content.items : []}
+          initialItems={readContentArray(w.content as unknown, 'items') as { id: string; text: string; done: boolean }[]}
         />
       )
     case "COUNTDOWN":
@@ -62,8 +89,8 @@ function WidgetView({ w, subjectId, autoFocusId }: { w: WidgetInstanceDto; subje
         <CountdownWidget
           widgetId={w.id}
           subjectId={subjectId}
-          targetDate={typeof (w as any)?.content?.targetDate === 'string' ? (w as any).content.targetDate : ''}
-          title={typeof (w as any)?.content?.title === 'string' ? (w as any).content.title : 'Exam'}
+          targetDate={readContentString(w.content as unknown, 'targetDate', '')}
+          title={readContentString(w.content as unknown, 'title', 'Exam')}
         />
       )
     case "POMODORO":
@@ -71,7 +98,7 @@ function WidgetView({ w, subjectId, autoFocusId }: { w: WidgetInstanceDto; subje
         <PomodoroWidget
           widgetId={w.id}
           subjectId={subjectId}
-          initialMinutes={typeof (w as any)?.content?.minutes === 'number' ? (w as any).content.minutes : 25}
+          initialMinutes={readContentNumber(w.content as unknown, 'minutes', 25)}
         />
       )
     case "CALENDAR_MONTH":
@@ -81,7 +108,7 @@ function WidgetView({ w, subjectId, autoFocusId }: { w: WidgetInstanceDto; subje
         <MusicPlayerWidget
           widgetId={w.id}
           subjectId={subjectId}
-          playlistUrl={typeof (w as any)?.content?.playlistUrl === 'string' ? (w as any).content.playlistUrl : ''}
+          playlistUrl={readContentString(w.content as unknown, 'playlistUrl', '')}
         />
       )
     case "LINK_TILE":
@@ -89,8 +116,8 @@ function WidgetView({ w, subjectId, autoFocusId }: { w: WidgetInstanceDto; subje
         <LinkTileWidget
           widgetId={w.id}
           subjectId={subjectId}
-          url={typeof (w as any)?.content?.url === 'string' ? (w as any).content.url : ''}
-          title={typeof (w as any)?.content?.title === 'string' ? (w as any).content.title : ''}
+          url={readContentString(w.content as unknown, 'url', '')}
+          title={readContentString(w.content as unknown, 'title', '')}
         />
       )
     case "PROGRESS":
@@ -98,8 +125,8 @@ function WidgetView({ w, subjectId, autoFocusId }: { w: WidgetInstanceDto; subje
         <ProgressWidget
           widgetId={w.id}
           subjectId={subjectId}
-          label={typeof (w as any)?.content?.label === 'string' ? (w as any).content.label : 'Progress'}
-          value={typeof (w as any)?.content?.value === 'number' ? (w as any).content.value : 40}
+          label={readContentString(w.content as unknown, 'label', 'Progress')}
+          value={readContentNumber(w.content as unknown, 'value', 40)}
         />
       )
     default:
@@ -125,6 +152,19 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
   const [containerPulse, setContainerPulse] = useState(false)
   const prevPaletteOpenRef = useRef<boolean>(false)
 
+  const scheduleLayoutSave = useCallback((payload: UpdateWorkspaceLayoutDto) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        await patchWorkspaceLayout(String(subjectId), payload)
+        setSavedFlash(true)
+        setTimeout(() => setSavedFlash(false), 900)
+      } catch {
+        /* ignore for now */
+      }
+    }, 250)
+  }, [subjectId])
+
   useEffect(() => {
     let aborted = false
     const ac = new AbortController()
@@ -138,14 +178,15 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
         setWidgets(ws)
         setBoardConfig(cfg)
       })
-      .catch((e: any) => {
+      .catch((e: unknown) => {
         // Swallow cancellations from AbortController (common during rapid navigation/mount-unmount)
-        const code = e?.code || e?.name
-        const msg = String(e?.message || '').toLowerCase()
+        const errObj = (e ?? {}) as Record<string, unknown>
+        const code = typeof errObj.code === 'string' ? errObj.code : (typeof errObj.name === 'string' ? (errObj.name as string) : '')
+        const msg = typeof errObj.message === 'string' ? errObj.message.toLowerCase() : ''
         if (code === 'ERR_CANCELED' || msg === 'canceled' || msg === 'cancelled') {
           return
         }
-        setError(e?.message || 'Failed to load workspace')
+        setError(e instanceof Error ? e.message : 'Failed to load workspace')
       })
     return () => {
       aborted = true
@@ -184,11 +225,11 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
         ;(async () => {
           try {
             const created = await addWidget(String(subjectId), {
-              type: src.type as any,
+              type: src.type,
               position: { x: src.position.x, y: src.position.y + src.size.height + 1 },
               size: { ...src.size },
-              content: (src as any).content,
-              style: (src as any).style,
+              content: src.content,
+              style: src.style,
             })
             setWidgets(prev => Array.isArray(prev) ? [...prev, created] : [created])
             setSelectedId(created.id)
@@ -234,16 +275,16 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [editMode, selectedId, widgets, subjectId])
+  }, [editMode, selectedId, widgets, subjectId, scheduleLayoutSave])
 
   const layout: Layout[] = useMemo(() => {
     if (!Array.isArray(widgets)) return []
     return widgets.map((w) => ({ i: w.id, x: w.position.x, y: w.position.y, w: w.size.width, h: w.size.height }))
   }, [widgets])
 
-  const onDragStart = (_layout: Layout[], _old: any, item: Layout) => {
+  const onDragStart = useCallback((_layout: Layout[], _old: Layout, item: Layout) => {
     setSelectedId(String(item.i))
-  }
+  }, [])
 
   const triggerSettle = (id: string) => {
     setSettling((prev) => {
@@ -262,7 +303,7 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
     }, 260)
   }
 
-  const onDragStop = async (_layout: Layout[], _old: any, item: Layout) => {
+  const onDragStop = async (_layout: Layout[], _old: Layout, item: Layout) => {
     const payload: UpdateWorkspaceLayoutDto = {
       widgets: [
         { id: String(item.i), position: { x: item.x, y: item.y }, size: { width: item.w, height: item.h } },
@@ -277,22 +318,9 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
     scheduleLayoutSave(payload)
   }
 
-  const onResizeStop = async (_layout: Layout[], _old: any, item: Layout) => {
+  const onResizeStop = async (_layout: Layout[], _old: Layout, item: Layout) => {
     await onDragStop(_layout, _old, item)
     triggerSettle(String(item.i))
-  }
-
-  function scheduleLayoutSave(payload: UpdateWorkspaceLayoutDto) {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(async () => {
-      try {
-        await patchWorkspaceLayout(String(subjectId), payload)
-        setSavedFlash(true)
-        setTimeout(() => setSavedFlash(false), 900)
-      } catch {
-        /* ignore for now */
-      }
-    }, 250)
   }
 
   if (error) {
@@ -367,8 +395,8 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
                 setWidgets(prev => Array.isArray(prev) ? [...prev, created] : [created])
                 setAutoFocusId(created.id)
                 setPaletteOpen(false)
-              } catch (e: any) {
-                setError(e?.message || 'Failed to add widget')
+              } catch (e: unknown) {
+                setError(e instanceof Error ? e.message : 'Failed to add widget')
               } finally {
                 setAdding(false)
               }
@@ -397,7 +425,7 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
                 })
                 setWidgets(prev => Array.isArray(prev) ? [...prev, created] : [created])
                 setPaletteOpen(false)
-              } catch (e: any) { setError(e?.message || 'Failed to add widget') } finally { setAdding(false) }
+              } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to add widget') } finally { setAdding(false) }
             }}
             whileHover={prefersReduced ? undefined : { scale: 1.02 }}
             whileTap={prefersReduced ? undefined : { scale: 0.98 }}
@@ -423,7 +451,7 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
                 })
                 setWidgets(prev => Array.isArray(prev) ? [...prev, created] : [created])
                 setPaletteOpen(false)
-              } catch (e: any) { setError(e?.message || 'Failed to add widget') } finally { setAdding(false) }
+              } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to add widget') } finally { setAdding(false) }
             }}
             whileHover={prefersReduced ? undefined : { scale: 1.02 }}
             whileTap={prefersReduced ? undefined : { scale: 0.98 }}
@@ -449,7 +477,7 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
                 })
                 setWidgets(prev => Array.isArray(prev) ? [...prev, created] : [created])
                 setPaletteOpen(false)
-              } catch (e: any) { setError(e?.message || 'Failed to add widget') } finally { setAdding(false) }
+              } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to add widget') } finally { setAdding(false) }
             }}
             whileHover={prefersReduced ? undefined : { scale: 1.02 }}
             whileTap={prefersReduced ? undefined : { scale: 0.98 }}
@@ -475,7 +503,7 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
                 })
                 setWidgets(prev => Array.isArray(prev) ? [...prev, created] : [created])
                 setPaletteOpen(false)
-              } catch (e: any) { setError(e?.message || 'Failed to add widget') } finally { setAdding(false) }
+              } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to add widget') } finally { setAdding(false) }
             }}
             whileHover={prefersReduced ? undefined : { scale: 1.02 }}
             whileTap={prefersReduced ? undefined : { scale: 0.98 }}
@@ -501,7 +529,7 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
                 })
                 setWidgets(prev => Array.isArray(prev) ? [...prev, created] : [created])
                 setPaletteOpen(false)
-              } catch (e: any) { setError(e?.message || 'Failed to add widget') } finally { setAdding(false) }
+              } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to add widget') } finally { setAdding(false) }
             }}
             whileHover={prefersReduced ? undefined : { scale: 1.02 }}
             whileTap={prefersReduced ? undefined : { scale: 0.98 }}
@@ -527,7 +555,7 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
                 })
                 setWidgets(prev => Array.isArray(prev) ? [...prev, created] : [created])
                 setPaletteOpen(false)
-              } catch (e: any) { setError(e?.message || 'Failed to add widget') } finally { setAdding(false) }
+              } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to add widget') } finally { setAdding(false) }
             }}
             whileHover={prefersReduced ? undefined : { scale: 1.02 }}
             whileTap={prefersReduced ? undefined : { scale: 0.98 }}
@@ -553,7 +581,7 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
                 })
                 setWidgets(prev => Array.isArray(prev) ? [...prev, created] : [created])
                 setPaletteOpen(false)
-              } catch (e: any) { setError(e?.message || 'Failed to add widget') } finally { setAdding(false) }
+              } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to add widget') } finally { setAdding(false) }
             }}
             whileHover={prefersReduced ? undefined : { scale: 1.02 }}
             whileTap={prefersReduced ? undefined : { scale: 0.98 }}
@@ -590,7 +618,7 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
                       try {
                         const saved = await patchBoardConfig(String(subjectId), next)
                         setBoardConfig(saved)
-                      } catch (e: any) { setError(e?.message || 'Failed to save board') }
+                      } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to save board') }
                     }}
                     aria-label={opt.name}
                     whileHover={prefersReduced ? undefined : { scale: 1.03 }}
@@ -624,7 +652,6 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
       onDragStart={editMode ? onDragStart : undefined}
       onDragStop={editMode ? onDragStop : undefined}
       onResizeStop={editMode ? onResizeStop : undefined}
-      measureBeforeMount={false}
       compactType={null}
       preventCollision={false}
     >
@@ -657,14 +684,14 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
                   onClick={async () => {
                     try {
                       const created = await addWidget(String(subjectId), {
-                        type: w.type as any,
+                        type: w.type,
                         position: { x: w.position.x, y: w.position.y + w.size.height + 1 },
                         size: { ...w.size },
-                        content: (w as any).content,
-                        style: (w as any).style,
+                        content: w.content,
+                        style: w.style,
                       })
                       setWidgets(prev => Array.isArray(prev) ? [...prev, created] : [created])
-                    } catch (e: any) { setError(e?.message || 'Failed to duplicate') }
+                    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to duplicate') }
                   }}
                 >
                   <Copy className="h-4 w-4" />
@@ -676,7 +703,7 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
                     try {
                       await deleteWidget(String(subjectId), w.id)
                       setWidgets(prev => Array.isArray(prev) ? prev.filter(x => x.id !== w.id) : prev)
-                    } catch (e: any) { setError(e?.message || 'Failed to delete') }
+                    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to delete') }
                   }}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -693,9 +720,9 @@ export function CanvasGrid({ subjectId, editMode }: { subjectId: string; editMod
                     aria-label={`Set color ${c}`}
                     onClick={async () => {
                       try {
-                        await updateWidget(String(subjectId), w.id, { style: { ...(w as any).style, bg: c } })
-                        setWidgets(prev => Array.isArray(prev) ? prev.map(x => x.id === w.id ? { ...x, style: { ...(x as any).style, bg: c } } as any : x) : prev)
-                      } catch (e: any) { setError(e?.message || 'Failed to update style') }
+                        await updateWidget(String(subjectId), w.id, { style: { ...(w.style ?? {}), bg: c } })
+                        setWidgets(prev => Array.isArray(prev) ? prev.map(x => x.id === w.id ? { ...x, style: { ...(x.style ?? {}), bg: c } } : x) : prev)
+                      } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to update style') }
                     }}
                   />
                 ))}

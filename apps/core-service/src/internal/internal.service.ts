@@ -1,14 +1,22 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertReindexDto } from './dto/upsert-reindex.dto';
 import { randomUUID } from 'crypto';
+import { UpsertTopicsDto } from './dto/upsert-topics.dto';
 
 @Injectable()
 export class InternalService {
   constructor(private readonly prisma: PrismaService) {}
 
   async listSubjectDocuments(subjectId: string) {
-    const subj = await this.prisma.subject.findUnique({ where: { id: subjectId }, select: { id: true } });
+    const subj = await this.prisma.subject.findUnique({
+      where: { id: subjectId },
+      select: { id: true },
+    });
     if (!subj) throw new NotFoundException('Subject not found');
 
     const docs = await this.prisma.document.findMany({
@@ -17,6 +25,27 @@ export class InternalService {
       orderBy: { createdAt: 'asc' },
     });
     return docs;
+  }
+
+  async listSubjectChunks(subjectId: string) {
+    const subj = await this.prisma.subject.findUnique({
+      where: { id: subjectId },
+      select: { id: true },
+    });
+    if (!subj) throw new NotFoundException('Subject not found');
+
+    const chunks = await this.prisma.documentChunk.findMany({
+      where: { document: { subjectId } },
+      select: {
+        id: true,
+        documentId: true,
+        index: true,
+        text: true,
+        tokens: true,
+      },
+      orderBy: [{ documentId: 'asc' }, { index: 'asc' }],
+    });
+    return chunks;
   }
 
   async upsertChunksAndEmbeddings(subjectId: string, dto: UpsertReindexDto) {
@@ -38,11 +67,15 @@ export class InternalService {
     // Validate embedding dimensions per-chunk
     for (const c of dto.chunks) {
       if (!Array.isArray(c.embedding) || c.embedding.length !== dto.dim) {
-        throw new BadRequestException(`Embedding dimension mismatch at index ${c.index}: expected ${dto.dim}, got ${c.embedding.length}`);
+        throw new BadRequestException(
+          `Embedding dimension mismatch at index ${c.index}: expected ${dto.dim}, got ${c.embedding.length}`,
+        );
       }
       // Ensure all numbers are finite
       if (!c.embedding.every((v) => Number.isFinite(v))) {
-        throw new BadRequestException(`Embedding contains non-finite numbers at index ${c.index}`);
+        throw new BadRequestException(
+          `Embedding contains non-finite numbers at index ${c.index}`,
+        );
       }
     }
 
@@ -89,6 +122,33 @@ export class InternalService {
                     "embedding" = EXCLUDED."embedding";`;
     });
 
-    return { upsertedChunks: dto.chunks.length, upsertedEmbeddings: dto.chunks.length };
+    return {
+      upsertedChunks: dto.chunks.length,
+      upsertedEmbeddings: dto.chunks.length,
+    };
+  }
+
+  async upsertSubjectTopics(subjectId: string, dto: UpsertTopicsDto) {
+    // Validate subject exists
+    const subj = await this.prisma.subject.findUnique({
+      where: { id: subjectId },
+      select: { id: true },
+    });
+    if (!subj) throw new NotFoundException('Subject not found');
+
+    await this.prisma.subjectTopics.upsert({
+      where: { subjectId },
+      update: {
+        engineVersion: dto.engineVersion,
+        topics: dto.topics as unknown as object,
+      },
+      create: {
+        subjectId,
+        engineVersion: dto.engineVersion,
+        topics: dto.topics as unknown as object,
+      },
+    });
+
+    return { status: 'ok', subjectId } as const;
   }
 }

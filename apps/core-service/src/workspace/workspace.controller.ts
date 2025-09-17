@@ -1,13 +1,23 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Request, UseGuards } from '@nestjs/common'
-import type { Request as ExpressRequest } from 'express'
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import { WorkspaceService } from './workspace.service'
-import { ApplyPersonaDto } from './dto/apply-persona.dto'
-import { UpdateWorkspaceLayoutDto } from './dto/update-workspace-layout.dto'
-import { CreateWidgetDto } from './dto/create-widget.dto'
-import { UpdateWidgetDto } from './dto/update-widget.dto'
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
+import type { Request as ExpressRequest } from 'express';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { WorkspaceService } from './workspace.service';
+import { ApplyPersonaDto } from './dto/apply-persona.dto';
+import { UpdateWorkspaceLayoutDto } from './dto/update-workspace-layout.dto';
+import { CreateWidgetDto } from './dto/create-widget.dto';
+import { UpdateWidgetDto } from './dto/update-widget.dto';
 
-type AuthRequest = ExpressRequest & { user: { id: string; email: string } }
+type AuthRequest = ExpressRequest & { user: { id: string; email: string } };
 
 @Controller()
 export class WorkspaceController {
@@ -16,7 +26,7 @@ export class WorkspaceController {
   // Public personas list
   @Get('workspace/personas')
   listPersonas() {
-    return this.workspace.listPersonas()
+    return this.workspace.listPersonas();
   }
 
   // Apply persona to a subject's canvas
@@ -27,14 +37,14 @@ export class WorkspaceController {
     @Body() dto: ApplyPersonaDto,
     @Request() req: AuthRequest,
   ) {
-    return this.workspace.applyPersona(subjectId, req.user.id, dto.personaId)
+    return this.workspace.applyPersona(subjectId, req.user.id, dto.personaId);
   }
 
   // Get subject workspace widgets
   @UseGuards(JwtAuthGuard)
   @Get('subjects/:id/workspace')
   getWorkspace(@Param('id') subjectId: string, @Request() req: AuthRequest) {
-    return this.workspace.getWorkspace(subjectId, req.user.id)
+    return this.workspace.getWorkspace(subjectId, req.user.id);
   }
 
   // Patch layout (positions/sizes only)
@@ -45,7 +55,11 @@ export class WorkspaceController {
     @Body() dto: UpdateWorkspaceLayoutDto,
     @Request() req: AuthRequest,
   ) {
-    return this.workspace.patchWorkspaceLayout(subjectId, req.user.id, dto.widgets)
+    return this.workspace.patchWorkspaceLayout(
+      subjectId,
+      req.user.id,
+      dto.widgets,
+    );
   }
 
   // --- New: Widget CRUD ---
@@ -56,7 +70,7 @@ export class WorkspaceController {
     @Body() dto: CreateWidgetDto,
     @Request() req: AuthRequest,
   ) {
-    return this.workspace.createWidget(subjectId, req.user.id, dto as any)
+    return this.workspace.createWidget(subjectId, req.user.id, dto);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -67,7 +81,7 @@ export class WorkspaceController {
     @Body() dto: UpdateWidgetDto,
     @Request() req: AuthRequest,
   ) {
-    return this.workspace.updateWidget(subjectId, req.user.id, widgetId, dto as any)
+    return this.workspace.updateWidget(subjectId, req.user.id, widgetId, dto);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -77,23 +91,23 @@ export class WorkspaceController {
     @Param('widgetId') widgetId: string,
     @Request() req: AuthRequest,
   ) {
-    return this.workspace.deleteWidget(subjectId, req.user.id, widgetId)
+    return this.workspace.deleteWidget(subjectId, req.user.id, widgetId);
   }
 
   // Board config
   @UseGuards(JwtAuthGuard)
   @Get('subjects/:id/board-config')
   getBoardConfig(@Param('id') subjectId: string, @Request() req: AuthRequest) {
-    return this.workspace.getBoardConfig(subjectId, req.user.id)
+    return this.workspace.getBoardConfig(subjectId, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch('subjects/:id/board-config')
   patchBoardConfig(
     @Param('id') subjectId: string,
-    @Body() config: any,
+    @Body() config: Record<string, unknown>,
     @Request() req: AuthRequest,
   ) {
-    return this.workspace.patchBoardConfig(subjectId, req.user.id, config)
+    return this.workspace.patchBoardConfig(subjectId, req.user.id, config);
   }
 }

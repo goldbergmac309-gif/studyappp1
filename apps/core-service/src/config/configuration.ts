@@ -14,8 +14,7 @@ export default registerAs('app', () => {
     internalApiKey: process.env.INTERNAL_API_KEY,
     rabbitmq: {
       url: rabbitUrl,
-      queueName:
-        process.env.RABBITMQ_QUEUE_NAME || 'document_processing_jobs',
+      queueName: process.env.RABBITMQ_QUEUE_NAME || 'document_processing_jobs',
       reindexQueueName:
         process.env.RABBITMQ_REINDEX_QUEUE_NAME || 'v2_reindexing_jobs',
     },
@@ -24,6 +23,13 @@ export default registerAs('app', () => {
       bucket: s3Bucket,
       endpoint: s3Endpoint,
       forcePathStyle,
+    },
+    oracleEmbed: {
+      url: isTest ? undefined : process.env.ORACLE_EMBED_URL,
+      connectTimeoutMs: Number(
+        process.env.ORACLE_EMBED_CONNECT_TIMEOUT_MS || 3000,
+      ),
+      readTimeoutMs: Number(process.env.ORACLE_EMBED_READ_TIMEOUT_MS || 7000),
     },
   };
 });

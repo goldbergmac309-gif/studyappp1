@@ -31,7 +31,7 @@ export default function TutorPage() {
             <CardContent>
               <div className="mb-4 space-y-2">
                 <div className="inline-flex max-w-[80%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
-                  Hello! I'm your AI study partner. How can I help today?
+                  Hello! I&apos;m your AI study partner. How can I help today?
                 </div>
               </div>
               <div className="flex items-center gap-2">

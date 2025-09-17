@@ -23,6 +23,7 @@ from requests.exceptions import ConnectionError as ReqConnectionError, Timeout a
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from app.core.conceptual_engine import ConceptualEngine
+from app.core.topics import compute_subject_topics
 from config import get_settings
 from utils.s3 import download_to_bytes
 
@@ -180,6 +181,17 @@ def v2_reindex_subject(self, payload: dict[str, Any]) -> dict[str, Any]:
             doc_id,
             batches_sent,
         )
+        # Trigger asynchronous subject-level topic aggregation after each document
+        try:
+            # Avoid import cycles by using send_task
+            self.app.send_task(
+                "oracle.aggregate_subject_topics",
+                args=[{"subjectId": subject_id}],
+                queue="celery",
+            )
+            logger.info("[V2] Enqueued aggregate_subject_topics for subjectId=%s", subject_id)
+        except Exception:
+            logger.exception("[V2] Failed to enqueue aggregate_subject_topics for subjectId=%s", subject_id)
 
     logger.info(
         "[V2] Reindex completed subjectId=%s docs_ok=%s/%s total_chunks=%s batches=%s",
@@ -189,6 +201,7 @@ def v2_reindex_subject(self, payload: dict[str, Any]) -> dict[str, Any]:
         total_chunks,
         batches_sent,
     )
+
     return {
         "status": "ok",
         "subjectId": subject_id,

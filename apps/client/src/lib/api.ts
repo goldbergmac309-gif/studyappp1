@@ -16,6 +16,8 @@ import type {
   CreateWidgetInstanceDto,
   UpdateWidgetInstanceDto,
   BoardConfigDto,
+  SemanticSearchResponse,
+  SubjectTopicsResponse,
 } from "@studyapp/shared-types"
 
 // Create a singleton Axios instance configured for the client app.
@@ -45,6 +47,48 @@ api.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+// Semantic Search API
+export async function semanticSearch(
+  subjectId: string,
+  params: { query: string; k?: number; threshold?: number; signal?: AbortSignal },
+): Promise<SemanticSearchResponse> {
+  const { query, k, threshold, signal } = params
+  try {
+    const res = await api.get<SemanticSearchResponse>(
+      `/subjects/${encodeURIComponent(subjectId)}/search`,
+      { params: { query, k, threshold }, signal },
+    )
+    return Array.isArray(res.data) ? res.data : []
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+// Topics V2 API
+export async function getSubjectTopics(
+  subjectId: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<SubjectTopicsResponse> {
+  try {
+    const res = await api.get<SubjectTopicsResponse>(
+      `/subjects/${encodeURIComponent(subjectId)}/topics`,
+      { signal: options.signal },
+    )
+    return Array.isArray(res.data) ? res.data : []
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if (err.response?.status === 404) return []
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
 
 // Widget CRUD (Epoch IV)
 export async function addWidget(

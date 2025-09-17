@@ -99,7 +99,7 @@ function BiologyMidtermDetails() {
 function TodayClassesDetails() {
   return (
     <div className="space-y-2">
-      <h4 className="text-sm font-medium">Today's Schedule</h4>
+      <h4 className="text-sm font-medium">Today&apos;s Schedule</h4>
       <ul className="text-xs space-y-1.5 text-muted-foreground">
         <li className="flex justify-between">
           <span>Physics Lab</span>
@@ -127,7 +127,7 @@ export default function QuickActions() {
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-16">
       <QuickAction icon={<BarChart2 className="h-5 w-5" />} title="Learning Insights" details={<LearningInsightsDetails />} />
       <QuickAction icon={<BookOpen className="h-5 w-5" />} title="Next: Biology Midterm" isHighlighted details={<BiologyMidtermDetails />} />
-      <QuickAction icon={<CalendarDays className="h-5 w-5" />} title="Today's Classes" details={<TodayClassesDetails />} />
+      <QuickAction icon={<CalendarDays className="h-5 w-5" />} title={"Today\'s Classes"} details={<TodayClassesDetails />} />
     </div>
   )
 }
