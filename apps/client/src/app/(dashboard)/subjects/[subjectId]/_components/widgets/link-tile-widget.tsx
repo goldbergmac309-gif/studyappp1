@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { updateWidget } from "@/lib/api"
 import { WidgetChrome } from "./widget-chrome"
+import Image from "next/image"
 
 function getFavicon(u: string): string | null {
   try {
@@ -36,7 +37,9 @@ export function LinkTileWidget({ widgetId, subjectId, url: initialUrl, title: in
         </div>
         {url ? (
           <a href={url} target="_blank" rel="noreferrer" className="no-drag flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted">
-            {favicon ? <img src={favicon} alt="" className="h-4 w-4" /> : null}
+            {favicon ? (
+              <Image src={favicon} alt="" width={16} height={16} unoptimized />
+            ) : null}
             <span className="truncate">{title || url}</span>
           </a>
         ) : (

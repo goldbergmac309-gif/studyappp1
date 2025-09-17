@@ -95,7 +95,7 @@ export default function SubjectWorkspacePage() {
             setUploadProgress(pct)
           },
         })
-      } catch (e) {
+      } catch {
         // handled inside DocumentsTab via toast on retry, keep page quiet
       } finally {
         setUploading(false)

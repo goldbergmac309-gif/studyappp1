@@ -13,7 +13,7 @@ RUN pnpm -w install --frozen-lockfile
 
 # Build
 COPY . .
-RUN pnpm -w build
+RUN pnpm -F @studyapp/shared-types build && pnpm -F core-service build
 
 # --- Runtime image ---
 FROM node:22-alpine AS runtime

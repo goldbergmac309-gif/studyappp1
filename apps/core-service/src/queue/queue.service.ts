@@ -17,22 +17,40 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   private channel: AmqpChannel | null = null;
   private readonly url?: string;
   private readonly queueName: string;
+  private readonly reindexQueueName: string;
 
   constructor(private readonly config: ConfigService) {
-    type AppConfig = { rabbitmq?: { url?: string; queueName?: string } };
+    type AppConfig = {
+      rabbitmq?: {
+        url?: string;
+        queueName?: string;
+        reindexQueueName?: string;
+      };
+    };
     const appCfg = this.config.get<AppConfig>('app');
     this.url = appCfg?.rabbitmq?.url;
     this.queueName = appCfg?.rabbitmq?.queueName ?? 'document_processing_jobs';
+    this.reindexQueueName =
+      appCfg?.rabbitmq?.reindexQueueName ?? 'v2_reindexing_jobs';
   }
 
   async onModuleInit(): Promise<void> {
     // Gracefully no-op if RabbitMQ is not configured (useful for tests/CI)
     if (!this.url) return;
+    // In Jest/E2E, do not attempt to connect to an external RMQ broker
+    if (process.env.NODE_ENV === 'test') return;
 
-    const conn = (await connect(this.url)) as unknown as RmqConnection;
-    this.connection = conn;
-    this.channel = await conn.createChannel();
-    await this.channel.assertQueue(this.queueName, { durable: true });
+    try {
+      const conn = (await connect(this.url)) as unknown as RmqConnection;
+      this.connection = conn;
+      this.channel = await conn.createChannel();
+      await this.channel.assertQueue(this.queueName, { durable: true });
+      await this.channel.assertQueue(this.reindexQueueName, { durable: true });
+    } catch {
+      // Leave channel/connection null; publish* methods will throw if used without channel.
+      this.connection = null;
+      this.channel = null;
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -55,6 +73,10 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     s3Key: string;
     userId: string;
   }): void {
+    // If RMQ is not configured, gracefully no-op (used in tests/CI)
+    if (!this.url) {
+      return;
+    }
     if (!this.channel) {
       throw new Error('RabbitMQ channel not initialized');
     }
@@ -82,9 +104,32 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
       if (!this.channel) return false;
       // checkQueue throws if the queue does not exist or channel is closed
       await this.channel.checkQueue(this.queueName);
+      await this.channel.checkQueue(this.reindexQueueName);
       return true;
     } catch {
       return false;
+    }
+  }
+
+  publishReindexJob(payload: { subjectId: string }): void {
+    // If RMQ is not configured, gracefully no-op (used in tests/CI)
+    if (!this.url) {
+      return;
+    }
+    if (!this.channel) {
+      throw new Error('RabbitMQ channel not initialized');
+    }
+    const ok = this.channel.sendToQueue(
+      this.reindexQueueName,
+      Buffer.from(JSON.stringify(payload)),
+      {
+        persistent: true,
+        contentType: 'application/json',
+        contentEncoding: 'utf-8',
+      },
+    );
+    if (!ok) {
+      throw new Error('Failed to enqueue reindex job: internal buffer full');
     }
   }
 }

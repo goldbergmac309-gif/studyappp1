@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams, useParams } from "next/navigation"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -13,10 +13,12 @@ import { useAnalysisPolling } from "@/lib/hooks/useAnalysisPolling"
 import { Button } from "@/components/ui/button"
 import { useDebouncedBool } from "@/lib/hooks/useDebouncedBool"
 import { useRelativeTime } from "@/lib/hooks/useRelativeTime"
+import { getSubjectTopics } from "@/lib/api"
 
 export default function InsightsTab() {
   const router = useRouter()
   const search = useSearchParams()
+  const { subjectId } = useParams<{ subjectId: string }>()
 
   const documents = useSubjectStore((s) => s.documents)
   const loading = useSubjectStore((s) => s.loading)
@@ -72,6 +74,23 @@ export default function InsightsTab() {
   const loadingDebounced = useDebouncedBool(loading, 250)
 
   const pollLastUpdatedText = useRelativeTime(lastUpdatedAt)
+
+  // Fetch V2 topics at subject-level and map to word cloud terms
+  const [topicTerms, setTopicTerms] = React.useState<Array<{ term: string; score: number }>>([])
+  React.useEffect(() => {
+    const id = String(subjectId || "")
+    if (!id) return
+    const ac = new AbortController()
+    getSubjectTopics(id, { signal: ac.signal })
+      .then((topics) => {
+        const terms = Array.isArray(topics)
+          ? topics.map((t) => ({ term: t.label, score: t.weight }))
+          : []
+        setTopicTerms(terms)
+      })
+      .catch(() => setTopicTerms([]))
+    return () => ac.abort()
+  }, [subjectId])
 
   if (!documents.length) {
     return (
@@ -212,10 +231,10 @@ export default function InsightsTab() {
         <Card>
           <CardHeader>
             <CardTitle>Topic Heat Map</CardTitle>
-            <CardDescription>Top keywords extracted from your document.</CardDescription>
+            <CardDescription>Key conceptual topics across this subject.</CardDescription>
           </CardHeader>
           <CardContent>
-            <TopicHeatMap />
+            <TopicHeatMap terms={topicTerms.length ? topicTerms : undefined} />
           </CardContent>
         </Card>
       </div>

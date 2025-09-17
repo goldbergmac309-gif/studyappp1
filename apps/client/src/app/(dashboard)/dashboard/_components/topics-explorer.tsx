@@ -4,13 +4,16 @@ import { ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { TOPICS } from "@/app/(dashboard)/dashboard/_components/topics.config"
+import Image from "next/image"
 
 function Topic({ title, imageSrc }: { title: string; imageSrc?: string }) {
   const src = imageSrc || "/placeholder.svg"
   return (
     <div className="bg-white border border-border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all cursor-pointer">
       <div className="aspect-video bg-muted overflow-hidden">
-        <img src={src} alt={title} className="w-full h-full object-cover" />
+        <div className="relative w-full h-full">
+          <Image src={src} alt={title} fill sizes="(max-width: 768px) 100vw, 25vw" style={{ objectFit: 'cover' }} unoptimized />
+        </div>
       </div>
       <div className="p-3">
         <h4 className="font-medium text-sm line-clamp-1">{title}</h4>

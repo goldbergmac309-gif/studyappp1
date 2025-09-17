@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useCallback } from "react"
 import { RotateCw, AlertCircle, Clock, Star, Grid, Archive } from "lucide-react"
 import { isAxiosError } from "axios"
 
@@ -22,22 +22,29 @@ export default function SubjectsPage() {
 
   const hasSubjects = useMemo(() => (subjects?.length ?? 0) > 0, [subjects])
 
-  async function fetchSubjects() {
+  const fetchSubjects = useCallback(async () => {
     try {
       setError(null)
       setRefreshing(true)
       const data = await listSubjects(activeTab)
       setSubjects(data)
     } catch (e: unknown) {
-      const err = e as { message?: string }
-      setError(err?.message || (isAxiosError(err) ? (err.response?.data as any)?.message || err.message : 'Failed to load'))
+      if (isAxiosError(e)) {
+        const data = e.response?.data as unknown
+        const msg = typeof data === 'object' && data && typeof (data as Record<string, unknown>).message === 'string'
+          ? String((data as Record<string, unknown>).message)
+          : e.message
+        setError(msg)
+      } else {
+        setError(e instanceof Error ? e.message : 'Failed to load')
+      }
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }
+  }, [activeTab])
 
-  useEffect(() => { fetchSubjects() }, [activeTab])
+  useEffect(() => { void fetchSubjects() }, [fetchSubjects])
 
   return (
     <div className="space-y-8">

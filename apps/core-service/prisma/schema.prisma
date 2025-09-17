@@ -39,6 +39,7 @@ model Subject {
   
   // Back-relation
   documents  Document[]
+  topics     SubjectTopics?
 
   // Workspace extensions (Epoch III)
   blueprintId  String?
@@ -69,6 +70,7 @@ model Document {
   subjectId String
   subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   analysisResult AnalysisResult?
+  chunks    DocumentChunk[]
 }
 
 model AnalysisResult {
@@ -80,6 +82,35 @@ model AnalysisResult {
   // Relations
   documentId String @unique
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+// V2 — Semantic models (pgvector)
+model DocumentChunk {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  index      Int
+  text       String
+  tokens     Int?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([documentId, index])
+  @@index([documentId])
+
+  // Back-relation to Embedding (1:1)
+  embedding Embedding?
+}
+
+model Embedding {
+  chunkId   String        @id
+  chunk     DocumentChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  model     String
+  dim       Int
+  embedding Unsupported("vector(384)")
+
+  createdAt DateTime @default(now())
 }
 
 // --- Workspace Models ---
@@ -130,4 +161,14 @@ enum WidgetType {
   MUSIC_PLAYER
   LINK_TILE
   PROGRESS
+}
+
+// Subject-level conceptual topics (Topic Heat Map V2)
+model SubjectTopics {
+  subjectId     String   @id
+  engineVersion String
+  topics        Json
+  updatedAt     DateTime @updatedAt
+
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 }

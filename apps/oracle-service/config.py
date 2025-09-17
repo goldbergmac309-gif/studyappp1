@@ -35,6 +35,7 @@ class Settings:
     # Messaging
     RABBITMQ_URL: str
     RABBITMQ_QUEUE_NAME: str
+    RABBITMQ_REINDEX_QUEUE_NAME: str
 
     # Core-service callback
     CORE_SERVICE_URL: str
@@ -48,6 +49,8 @@ class Settings:
 
     # Engine metadata
     ENGINE_VERSION: str
+    ENGINE_MODEL_NAME: str
+    ENGINE_DIM: int
 
     # Logging & timeouts
     LOG_LEVEL: str
@@ -59,6 +62,9 @@ class Settings:
     RETRY_BACKOFF: float
     RETRY_BACKOFF_MAX: float
     RETRY_JITTER: bool
+
+    # V2 batching
+    REINDEX_BATCH_SIZE: int
 
     @property
     def http_timeouts(self) -> tuple[float, float]:
@@ -80,6 +86,7 @@ def get_settings() -> Settings:
     cfg = Settings(
         RABBITMQ_URL=os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672//"),
         RABBITMQ_QUEUE_NAME=os.getenv("RABBITMQ_QUEUE_NAME", "document_processing_jobs"),
+        RABBITMQ_REINDEX_QUEUE_NAME=os.getenv("RABBITMQ_REINDEX_QUEUE_NAME", "v2_reindexing_jobs"),
         CORE_SERVICE_URL=os.getenv("CORE_SERVICE_URL", "http://localhost:3000"),
         INTERNAL_API_KEY=os.getenv("INTERNAL_API_KEY", ""),
         AWS_REGION=os.getenv("AWS_REGION"),
@@ -87,6 +94,8 @@ def get_settings() -> Settings:
         AWS_S3_ENDPOINT=os.getenv("AWS_S3_ENDPOINT"),
         AWS_S3_FORCE_PATH_STYLE=_to_bool(os.getenv("AWS_S3_FORCE_PATH_STYLE"), False),
         ENGINE_VERSION=os.getenv("ENGINE_VERSION", "oracle-v1"),
+        ENGINE_MODEL_NAME=os.getenv("ENGINE_MODEL_NAME", "stub-miniLM"),
+        ENGINE_DIM=_to_int(os.getenv("ENGINE_DIM"), 384),
         LOG_LEVEL=os.getenv("LOG_LEVEL", "INFO").upper(),
         HTTP_CONNECT_TIMEOUT=_to_float(os.getenv("HTTP_CONNECT_TIMEOUT"), 5.0),
         HTTP_READ_TIMEOUT=_to_float(os.getenv("HTTP_READ_TIMEOUT"), 30.0),
@@ -94,6 +103,7 @@ def get_settings() -> Settings:
         RETRY_BACKOFF=_to_float(os.getenv("RETRY_BACKOFF"), 2.0),
         RETRY_BACKOFF_MAX=_to_float(os.getenv("RETRY_BACKOFF_MAX"), 60.0),
         RETRY_JITTER=_to_bool(os.getenv("RETRY_JITTER"), True),
+        REINDEX_BATCH_SIZE=_to_int(os.getenv("REINDEX_BATCH_SIZE"), 250),
     )
 
     _SETTINGS = cfg
