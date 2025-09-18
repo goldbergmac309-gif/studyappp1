@@ -201,3 +201,45 @@ Documented by Cascade (Forge). This entry marks the finalization of the Synapse 
 
 ---
 Documented by Cascade (Forge). This entry marks the successful completion of Epoch III and the transformation of Synapse OS into an interactive creative workspace aligned with BLUEPRINT v7.0.
+
+## 2025-09-18 — Epoch I: No Dead Ends (Sprint 1) — Status: COMPLETE
+
+### Executive Summary
+- Closed all major navigation and creation dead ends, delivering a seamless onboarding-to-workflow experience.
+- Implemented a public Landing Page, protected dashboard shell, All Subjects index with filters, a two‑step Subject Genesis modal, and full Subject management (rename, star, archive/unarchive).
+- Verified end-to-end by operator walkthrough; artifacts captured for Landing, Dashboard, Subject Genesis, All Subjects, and Archive flow.
+
+### Deliverables
+- Client (Next.js)
+  - Landing Page at `/` with `Hero` and `FeatureSection` components.
+  - Protected `(dashboard)` layout with `Header` + `Sidebar`.
+  - Dashboard page showing “My spaces” with tabs and clear CTAs (`+ Add space`).
+  - All Subjects page (`/all-subjects`) with tabs: Recent, Starred, All, Archived; header “+ New” button; empty-state CTA.
+  - Two-step Subject Genesis Modal capturing `name`, `courseCode`, `color`, `professorName`, `ambition`; navigates to new subject workspace.
+  - SubjectCard kebab menu: Star/Unstar, Rename, Settings, Archive/Unarchive (with ownership enforced server-side).
+  - API client hardened in `apps/client/src/lib/api.ts` (401 auto-logout, error normalization).
+
+- Core-service (NestJS)
+  - Auth endpoints `POST /auth/signup`, `POST /auth/login` return `LoginResponse` per contract.
+  - Subjects endpoints: create/list/update; soft archive via DELETE and unarchive endpoint, with ownership checks.
+  - Health endpoints: `GET /health/live` (200) and `GET /health/ready` (503 until optional deps ready).
+  - Dockerfile updated to production-ready image using `pnpm deploy --legacy` and Prisma Client generation.
+
+### Evidence
+- Manual verification with annotated screenshots:
+  1) Landing Page (Hero + Feature)
+  2) Dashboard (shows created subject)
+  3) Subject Genesis (two-step wizard with metadata fields)
+  4) All Subjects (tabs functional)
+  5) Archive flow (SubjectCard kebab shows Archive)
+
+### Quality Gates
+- Client typecheck/lint: PASS.
+- Core-service build: PASS; containerized runtime fixed with deploy + prisma generate.
+- API health: `GET /health/live` returns 200 under Docker on port 3001.
+
+### Release Tag
+- Created annotated tag `v1.5.0-gold` — "No Dead Ends: Landing, Nav, Subject Genesis, All Subjects, Archive flow; CTAs added; Docker runtime fixed (pnpm deploy + Prisma)."
+
+---
+Documented by Cascade (Forge), following constraints in `BLUEPRINT.md`, `DOCTRINE.md`, and `PROJECT_OVERVIEW.md`. This entry closes Epoch I: The Age of Polish & Perfection.

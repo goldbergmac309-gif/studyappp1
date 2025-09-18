@@ -102,7 +102,7 @@ export default function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                {navLink("/subjects", <BookText className="h-4 w-4 opacity-80" />, "All subjects")}
+                {navLink("/all-subjects", <BookText className="h-4 w-4 opacity-80" />, "All subjects")}
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>

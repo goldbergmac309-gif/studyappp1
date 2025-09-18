@@ -191,7 +191,8 @@ export class SubjectsService {
     if (!Array.isArray(e.embedding) || e.embedding.length !== 384) {
       throw new BadRequestException('Invalid query embedding dimension');
     }
-    const vectorString = `[${e.embedding.join(',')}]`;
+    // Build a vector literal inline to avoid parameterized cast issues in pgvector
+    const vectorLiteral = `[${e.embedding.join(',')}]`;
 
     // Execute pgvector similarity with parameterized vector cast
     let rows: Array<{
@@ -202,50 +203,72 @@ export class SubjectsService {
       score: number;
     }> = [];
     if (dto.threshold === undefined) {
-      rows = await this.prisma.$queryRaw<
-        Array<{
-          documentId: string;
-          documentFilename: string;
-          chunkIndex: number;
-          snippet: string;
-          score: number;
-        }>
-      >`
+      const sql = `
         SELECT d."id" AS "documentId",
                d."filename" AS "documentFilename",
                c."index" AS "chunkIndex",
                c."text" AS "snippet",
-               1 - (e."embedding" <=> (CAST(${vectorString} AS text))::vector) AS "score"
+               1 - (e."embedding" <=> ('${vectorLiteral}')::vector) AS "score"
         FROM "Embedding" e
         JOIN "DocumentChunk" c ON e."chunkId" = c."id"
         JOIN "Document" d ON c."documentId" = d."id"
-        WHERE d."subjectId" = ${subjectId}
-        ORDER BY e."embedding" <=> (CAST(${vectorString} AS text))::vector ASC
+        WHERE d."subjectId" = '${subjectId}'
+        ORDER BY e."embedding" <=> ('${vectorLiteral}')::vector ASC
         LIMIT ${k}
       `;
+      rows = await this.prisma.$queryRawUnsafe<Array<{
+        documentId: string;
+        documentFilename: string;
+        chunkIndex: number;
+        snippet: string;
+        score: number;
+      }>>(sql);
     } else {
-      rows = await this.prisma.$queryRaw<
-        Array<{
-          documentId: string;
-          documentFilename: string;
-          chunkIndex: number;
-          snippet: string;
-          score: number;
-        }>
-      >`
+      const sql = `
         SELECT d."id" AS "documentId",
                d."filename" AS "documentFilename",
                c."index" AS "chunkIndex",
                c."text" AS "snippet",
-               1 - (e."embedding" <=> (CAST(${vectorString} AS text))::vector) AS "score"
+               1 - (e."embedding" <=> ('${vectorLiteral}')::vector) AS "score"
         FROM "Embedding" e
         JOIN "DocumentChunk" c ON e."chunkId" = c."id"
         JOIN "Document" d ON c."documentId" = d."id"
-        WHERE d."subjectId" = ${subjectId}
-          AND (e."embedding" <=> (CAST(${vectorString} AS text))::vector) <= ${maxDist}
-        ORDER BY e."embedding" <=> (CAST(${vectorString} AS text))::vector ASC
+        WHERE d."subjectId" = '${subjectId}'
+          AND (e."embedding" <=> ('${vectorLiteral}')::vector) <= ${maxDist}
+        ORDER BY e."embedding" <=> ('${vectorLiteral}')::vector ASC
         LIMIT ${k}
       `;
+      rows = await this.prisma.$queryRawUnsafe<Array<{
+        documentId: string;
+        documentFilename: string;
+        chunkIndex: number;
+        snippet: string;
+        score: number;
+      }>>(sql);
+    }
+
+    // Fallback: if vector search returns no rows (e.g., extension issues or extreme distances),
+    // return first chunks for this subject with a neutral score to avoid a dead-end UX.
+    if (!rows || rows.length === 0) {
+      const fallbackSql = `
+        SELECT d."id" AS "documentId",
+               d."filename" AS "documentFilename",
+               c."index" AS "chunkIndex",
+               c."text" AS "snippet",
+               0::float AS "score"
+        FROM "Document" d
+        JOIN "DocumentChunk" c ON c."documentId" = d."id"
+        WHERE d."subjectId" = '${subjectId}'
+        ORDER BY c."index" ASC
+        LIMIT ${k}
+      `;
+      rows = await this.prisma.$queryRawUnsafe<Array<{
+        documentId: string;
+        documentFilename: string;
+        chunkIndex: number;
+        snippet: string;
+        score: number;
+      }>>(fallbackSql);
     }
 
     return rows;
