@@ -16,16 +16,6 @@ async function clearClientState(page: Page) {
   })
 }
 
-async function createSubject(page: Page, name: string) {
-  const inline = page.getByPlaceholder('e.g. Linear Algebra')
-  const form = page.locator('form').filter({ has: inline.first() }).first()
-  await expect(form).toBeVisible({ timeout: 30000 })
-  await inline.first().scrollIntoViewIfNeeded()
-  await inline.first().fill(name)
-  await form.locator('button[type="submit"]').click()
-  await expect(page.getByRole('link', { name: new RegExp(`${name}\\s+Open workspace`) })).toBeVisible()
-}
-
 async function getAuthToken(page: Page, fallback?: { email: string; password: string }): Promise<string> {
   const raw = await page.evaluate(() => localStorage.getItem('studyapp-auth'))
   if (raw) {

@@ -15,17 +15,21 @@ RUN pnpm -w install --frozen-lockfile
 COPY . .
 RUN pnpm -F @studyapp/shared-types build && pnpm -F core-service build
 
+# Create a production-ready deploy directory with pruned node_modules for core-service
+RUN pnpm deploy --filter core-service --prod --legacy /app/deploy \
+  && cp -R apps/core-service/dist /app/deploy/dist \
+  && cp -R apps/core-service/prisma /app/deploy/prisma
+
 # --- Runtime image ---
 FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-# copy node_modules from builder to avoid re-resolving workspace at runtime
-COPY --from=base /app/node_modules ./node_modules
-# copy built app
-COPY --from=base /app/apps/core-service/dist ./dist
-# minimal package.json for metadata (not used by runtime)
-COPY apps/core-service/package.json ./package.json
+# Copy pruned app (package.json, node_modules, dist) from deploy directory
+COPY --from=base /app/deploy/ ./
+
+# Generate Prisma Client inside the runtime image (schema is at ./prisma/schema.prisma)
+RUN npx prisma generate --schema=./prisma/schema.prisma
 
 EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD wget -qO- http://localhost:3000/health/live || exit 1

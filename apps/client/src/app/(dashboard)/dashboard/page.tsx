@@ -11,7 +11,6 @@ import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import SubjectGenesisModal from "@/app/(dashboard)/dashboard/_components/subject-genesis-modal"
-import CreateSubjectForm from "@/app/(dashboard)/dashboard/_components/create-subject-form"
 import SubjectCard from "@/app/(dashboard)/dashboard/_components/subject-card"
 import QuickActions from "@/app/(dashboard)/dashboard/_components/quick-actions"
 import LearningPrompt from "@/app/(dashboard)/dashboard/_components/learning-prompt"
@@ -71,11 +70,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Create subject inline form */}
-        <div className="mb-4">
-          <CreateSubjectForm onCreated={fetchSubjects} />
-        </div>
-
         {loading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -100,8 +94,11 @@ export default function DashboardPage() {
             )}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-            No subjects yet — create one to get started.
+          <div className="rounded-xl border border-dashed p-10 text-center">
+            <div className="text-sm text-muted-foreground">No subjects yet — create one to get started.</div>
+            <div className="mt-4">
+              <SubjectGenesisModal onCreated={fetchSubjects} />
+            </div>
           </div>
         )}
       </div>

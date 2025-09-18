@@ -57,6 +57,10 @@ export default function SubjectsPage() {
             <TabButton active={activeTab === "all"} onClick={() => setActiveTab("all")} icon={<Grid className="h-3.5 w-3.5" />} label="All" />
             <TabButton active={activeTab === "archived"} onClick={() => setActiveTab("archived")} icon={<Archive className="h-3.5 w-3.5" />} label="Archived" />
           </div>
+          <SubjectGenesisModal
+            onCreated={fetchSubjects}
+            trigger={<Button size="sm" className="text-xs h-8">+ New</Button>}
+          />
           <Button variant="ghost" size="sm" className="text-xs h-8 gap-1" onClick={fetchSubjects} disabled={refreshing}>
             <RotateCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Refresh
           </Button>
@@ -94,8 +98,11 @@ export default function SubjectsPage() {
           )}
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          No subjects yet — create one to get started.
+        <div className="rounded-xl border border-dashed p-10 text-center">
+          <div className="text-sm text-muted-foreground">No subjects yet — create one to get started.</div>
+          <div className="mt-4">
+            <SubjectGenesisModal onCreated={fetchSubjects} />
+          </div>
         </div>
       )}
     </div>
