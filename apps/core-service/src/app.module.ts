@@ -12,6 +12,7 @@ import { QueueModule } from './queue/queue.module';
 import { InternalModule } from './internal/internal.module';
 import { HealthModule } from './health/health.module';
 import { WorkspaceModule } from './workspace/workspace.module';
+import { NotesModule } from './notes/notes.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { WorkspaceModule } from './workspace/workspace.module';
     InternalModule,
     HealthModule,
     WorkspaceModule,
+    NotesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

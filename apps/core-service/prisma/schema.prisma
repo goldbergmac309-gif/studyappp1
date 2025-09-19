@@ -40,6 +40,8 @@ model Subject {
   // Back-relation
   documents  Document[]
   topics     SubjectTopics?
+  // Notes (Epoch I, Sprint 2)
+  notes      Note[]
 
   // Workspace extensions (Epoch III)
   blueprintId  String?
@@ -111,6 +113,37 @@ model Embedding {
   embedding Unsupported("vector(384)")
 
   createdAt DateTime @default(now())
+}
+
+// --- Notes (Second Brain Genesis) ---
+
+model Note {
+  id        String   @id @default(cuid())
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  title     String
+  content   Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions  NoteVersion[]
+
+  @@index([subjectId, updatedAt])
+}
+
+model NoteVersion {
+  id        String   @id @default(cuid())
+  noteId    String
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  title     String
+  content   Json
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  @@index([noteId, createdAt])
 }
 
 // --- Workspace Models ---
