@@ -22,6 +22,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { CanvasGrid } from "@/app/(dashboard)/subjects/[subjectId]/_components/canvas/canvas-grid"
 import DocumentsTab from "@/app/(dashboard)/subjects/[subjectId]/_components/documents-tab"
+import NotesTab from "@/app/(dashboard)/subjects/[subjectId]/_components/notes-tab"
 import { useDocumentPolling } from "@/lib/hooks/useDocumentPolling"
 
 interface Subject { id: string; name: string }
@@ -64,6 +65,14 @@ export default function SubjectWorkspacePage() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.key === 'e' || e.key === 'E') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const target = e.target as HTMLElement | null
+        // Ignore when typing inside inputs, textareas, selects, or contentEditable elements
+        if (target) {
+          const tag = target.tagName
+          const isFormControl = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+          const isEditable = (target as HTMLElement).isContentEditable
+          if (isFormControl || isEditable) return
+        }
         e.preventDefault()
         setEditMode((v) => !v)
       }
@@ -170,7 +179,7 @@ export default function SubjectWorkspacePage() {
             <CanvasGrid subjectId={String(subjectId)} editMode={editMode} />
           </TabsContent>
           <TabsContent value="notes" className="space-y-4">
-            <div className="text-sm text-muted-foreground">Notes view — coming soon.</div>
+            <NotesTab />
           </TabsContent>
           <TabsContent value="resources" className="space-y-4">
             <DocumentsTab

@@ -9,25 +9,35 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Sidebar, SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
 export default function ProtectedLayout({ children }: PropsWithChildren) {
-  const { token } = useAuth()
+  const { token, hydrated } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
-  const [hydrated, setHydrated] = useState(false)
+  const [clientReady, setClientReady] = useState(false)
   // Sidebar open state is managed by SidebarProvider internally
 
-  useEffect(() => { setHydrated(true) }, [])
+  useEffect(() => { setClientReady(true) }, [])
 
   useEffect(() => {
-    if (!hydrated) return
-    if (!token) {
+    if (!clientReady) return
+    // Check persisted token to avoid race on initial hydration after reload
+    let persistedToken: string | null = null
+    try {
+      const raw = localStorage.getItem('studyapp-auth')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        persistedToken = parsed?.state?.token ?? null
+      }
+    } catch {}
+    const effectiveToken = token ?? persistedToken
+    if (!effectiveToken) {
       const to = pathname && pathname !== "/" ? `?next=${encodeURIComponent(pathname)}` : ""
       router.replace(`/login${to}`)
     }
-  }, [hydrated, token, router, pathname])
+  }, [clientReady, token, router, pathname])
 
   // Sidebar persistence handled by SidebarProvider
 
-  if (!hydrated) {
+  if (!clientReady) {
     return (
       <div className="min-h-screen grid grid-cols-1 md:grid-cols-[272px_1fr]">
         <aside className="hidden md:block bg-sidebar" />
@@ -44,6 +54,7 @@ export default function ProtectedLayout({ children }: PropsWithChildren) {
     )
   }
 
+  if (!hydrated) return null
   if (!token) return null
 
   // AppShell: Sidebar + Inset content

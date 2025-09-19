@@ -11,6 +11,7 @@ export interface AuthUser {
 export interface AuthState {
   token: string | null
   user: AuthUser | null
+  hydrated: boolean
   actions: {
     login: (token: string, user: AuthUser) => void
     logout: () => void
@@ -19,9 +20,10 @@ export interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       token: null,
       user: null,
+      hydrated: true,
       actions: {
         login: (token, user) => set(() => ({ token, user })),
         logout: () => set(() => ({ token: null, user: null })),
@@ -32,6 +34,10 @@ export const useAuthStore = create<AuthState>()(
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ token: state.token, user: state.user }),
       version: 1,
+      onRehydrateStorage: () => (state, error) => {
+        // mark hydrated whether success or failure to avoid blocking
+        try { /* noop */ } finally { (useAuthStore as any).setState({ hydrated: true }) }
+      },
     }
   )
 )

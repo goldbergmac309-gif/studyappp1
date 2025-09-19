@@ -18,6 +18,7 @@ import type {
   BoardConfigDto,
   SemanticSearchResponse,
   SubjectTopicsResponse,
+  NoteDto,
 } from "@studyapp/shared-types"
 
 // Create a singleton Axios instance configured for the client app.
@@ -47,6 +48,118 @@ api.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+// Notes API (Epoch I, Sprint 2)
+export async function listNotes(
+  subjectId: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<NoteDto[]> {
+  try {
+    const res = await api.get<NoteDto[]>(
+      `/subjects/${encodeURIComponent(subjectId)}/notes`,
+      { signal: options.signal },
+    )
+    const arr = Array.isArray(res.data) ? res.data : []
+    // Normalize timestamps to ISO strings (defensive)
+    const normalized = arr.map((n) => ({
+      ...n,
+      createdAt: new Date(n.createdAt).toISOString(),
+      updatedAt: new Date(n.updatedAt).toISOString(),
+    }))
+    // Ensure most-recent first
+    normalized.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    return normalized
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if (err.response?.status === 404) return []
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function createNote(
+  subjectId: string,
+  payload: { title: string; content?: any },
+  options: { signal?: AbortSignal } = {},
+): Promise<NoteDto> {
+  try {
+    const res = await api.post<NoteDto>(
+      `/subjects/${encodeURIComponent(subjectId)}/notes`,
+      payload,
+      { signal: options.signal },
+    )
+    return res.data
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function getNote(
+  subjectId: string,
+  noteId: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<NoteDto> {
+  try {
+    const res = await api.get<NoteDto>(
+      `/subjects/${encodeURIComponent(subjectId)}/notes/${encodeURIComponent(noteId)}`,
+      { signal: options.signal },
+    )
+    return res.data
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function updateNote(
+  subjectId: string,
+  noteId: string,
+  payload: { title?: string; content?: any },
+  options: { signal?: AbortSignal } = {},
+): Promise<NoteDto> {
+  try {
+    const res = await api.patch<NoteDto>(
+      `/subjects/${encodeURIComponent(subjectId)}/notes/${encodeURIComponent(noteId)}`,
+      payload,
+      { signal: options.signal },
+    )
+    return res.data
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function deleteNote(
+  subjectId: string,
+  noteId: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<void> {
+  try {
+    await api.delete(
+      `/subjects/${encodeURIComponent(subjectId)}/notes/${encodeURIComponent(noteId)}`,
+      { signal: options.signal },
+    )
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
 
 // Semantic Search API
 export async function semanticSearch(

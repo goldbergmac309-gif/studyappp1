@@ -123,3 +123,13 @@ export interface SubjectTopic {
 }
 
 export type SubjectTopicsResponse = SubjectTopic[]
+
+// Epoch I, Sprint 2: Notes contracts
+export interface NoteDto {
+  id: string
+  subjectId: string
+  title: string
+  content: any
+  createdAt: string
+  updatedAt: string
+}

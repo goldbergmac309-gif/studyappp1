@@ -9,5 +9,6 @@ export function useAuth() {
   const token = useAuthStore((s) => s.token)
   const user = useAuthStore((s) => s.user)
   const actions = useAuthStore((s) => s.actions)
-  return { token, user, actions }
+  const hydrated = useAuthStore((s) => s.hydrated)
+  return { token, user, actions, hydrated }
 }
