@@ -79,9 +79,13 @@ def get_settings() -> Settings:
     if _SETTINGS is not None:
         return _SETTINGS
 
-    # Load .env if the package is used locally
-    if load_dotenv is not None:
+    # Load .env if the package is used locally (but not during pytest)
+    # This prevents tests from being polluted by dev .env values like AWS_S3_ENDPOINT.
+    if load_dotenv is not None and "PYTEST_CURRENT_TEST" not in os.environ and os.getenv("DO_NOT_LOAD_DOTENV") != "1":
         load_dotenv()
+
+    # If running under pytest, avoid forcing a custom S3 endpoint so moto can intercept.
+    _endpoint = None if "PYTEST_CURRENT_TEST" in os.environ else os.getenv("AWS_S3_ENDPOINT")
 
     cfg = Settings(
         RABBITMQ_URL=os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672//"),
@@ -91,11 +95,11 @@ def get_settings() -> Settings:
         INTERNAL_API_KEY=os.getenv("INTERNAL_API_KEY", ""),
         AWS_REGION=os.getenv("AWS_REGION"),
         S3_BUCKET=os.getenv("S3_BUCKET"),
-        AWS_S3_ENDPOINT=os.getenv("AWS_S3_ENDPOINT"),
+        AWS_S3_ENDPOINT=_endpoint,
         AWS_S3_FORCE_PATH_STYLE=_to_bool(os.getenv("AWS_S3_FORCE_PATH_STYLE"), False),
         ENGINE_VERSION=os.getenv("ENGINE_VERSION", "oracle-v1"),
         ENGINE_MODEL_NAME=os.getenv("ENGINE_MODEL_NAME", "stub-miniLM"),
-        ENGINE_DIM=_to_int(os.getenv("ENGINE_DIM"), 384),
+        ENGINE_DIM=_to_int(os.getenv("ENGINE_DIM"), 1536),
         LOG_LEVEL=os.getenv("LOG_LEVEL", "INFO").upper(),
         HTTP_CONNECT_TIMEOUT=_to_float(os.getenv("HTTP_CONNECT_TIMEOUT"), 5.0),
         HTTP_READ_TIMEOUT=_to_float(os.getenv("HTTP_READ_TIMEOUT"), 30.0),

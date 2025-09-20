@@ -164,17 +164,17 @@ describe('Internal Reindex (e2e)', () => {
     const makeBatch = (scale: number) => ({
       documentId: docId,
       model: 'sentence-transformers/all-MiniLM-L6-v2',
-      dim: 384,
+      dim: 1536,
       chunks: [
         {
           index: 0,
           text: 'A',
-          embedding: Array(384)
+          embedding: Array(1536)
             .fill(0)
             .map((_, i) => i * 0.001 * scale),
         },
-        { index: 1, text: 'B', embedding: Array(384).fill(0.5 * scale) },
-        { index: 2, text: 'C', embedding: Array(384).fill(1.0 * scale) },
+        { index: 1, text: 'B', embedding: Array(1536).fill(0.5 * scale) },
+        { index: 2, text: 'C', embedding: Array(1536).fill(1.0 * scale) },
       ],
     });
 
@@ -206,7 +206,7 @@ describe('Internal Reindex (e2e)', () => {
         where: { chunkId: ch.id },
       });
       expect(emb).toBeTruthy();
-      expect(emb?.dim).toBe(384);
+      expect(emb?.dim).toBe(1536);
       expect(typeof emb?.model).toBe('string');
     }
   });

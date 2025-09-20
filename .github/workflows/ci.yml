@@ -72,3 +72,54 @@ jobs:
           path: |
             apps/client/test-results
             apps/client/playwright-report
+
+  core-e2e-pgvector:
+    name: Core-Service E2E (pgvector)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: studyapp_dev
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" 
+          --health-interval 10s 
+          --health-timeout 5s 
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Core-Service E2E (with Postgres)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studyapp_dev?schema=public
+          JWT_SECRET: ci-jwt
+          INTERNAL_API_KEY: ci-internal
+          NODE_ENV: test
+        run: pnpm --filter core-service run test:e2e
+
+      - name: Upload Jest Artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-service-jest-artifacts
+          path: |
+            apps/core-service/coverage
+            apps/core-service/test-results

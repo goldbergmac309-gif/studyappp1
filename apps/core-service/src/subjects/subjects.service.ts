@@ -188,7 +188,7 @@ export class SubjectsService {
 
     // Get query embedding
     const e = await this.embed.embedText(q);
-    if (!Array.isArray(e.embedding) || e.embedding.length !== 384) {
+    if (!Array.isArray(e.embedding) || e.embedding.length !== 1536) {
       throw new BadRequestException('Invalid query embedding dimension');
     }
     // Build a vector literal inline to avoid parameterized cast issues in pgvector
@@ -216,13 +216,15 @@ export class SubjectsService {
         ORDER BY e."embedding" <=> ('${vectorLiteral}')::vector ASC
         LIMIT ${k}
       `;
-      rows = await this.prisma.$queryRawUnsafe<Array<{
-        documentId: string;
-        documentFilename: string;
-        chunkIndex: number;
-        snippet: string;
-        score: number;
-      }>>(sql);
+      rows = await this.prisma.$queryRawUnsafe<
+        Array<{
+          documentId: string;
+          documentFilename: string;
+          chunkIndex: number;
+          snippet: string;
+          score: number;
+        }>
+      >(sql);
     } else {
       const sql = `
         SELECT d."id" AS "documentId",
@@ -238,13 +240,15 @@ export class SubjectsService {
         ORDER BY e."embedding" <=> ('${vectorLiteral}')::vector ASC
         LIMIT ${k}
       `;
-      rows = await this.prisma.$queryRawUnsafe<Array<{
-        documentId: string;
-        documentFilename: string;
-        chunkIndex: number;
-        snippet: string;
-        score: number;
-      }>>(sql);
+      rows = await this.prisma.$queryRawUnsafe<
+        Array<{
+          documentId: string;
+          documentFilename: string;
+          chunkIndex: number;
+          snippet: string;
+          score: number;
+        }>
+      >(sql);
     }
 
     // Fallback: if vector search returns no rows (e.g., extension issues or extreme distances),
@@ -262,13 +266,15 @@ export class SubjectsService {
         ORDER BY c."index" ASC
         LIMIT ${k}
       `;
-      rows = await this.prisma.$queryRawUnsafe<Array<{
-        documentId: string;
-        documentFilename: string;
-        chunkIndex: number;
-        snippet: string;
-        score: number;
-      }>>(fallbackSql);
+      rows = await this.prisma.$queryRawUnsafe<
+        Array<{
+          documentId: string;
+          documentFilename: string;
+          chunkIndex: number;
+          snippet: string;
+          score: number;
+        }>
+      >(fallbackSql);
     }
 
     return rows;

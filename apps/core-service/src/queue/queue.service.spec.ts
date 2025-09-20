@@ -17,6 +17,7 @@ describe('QueueService', () => {
       rabbitmq: {
         url,
         queueName: 'document_processing_jobs',
+        reindexQueueName: 'v2_reindexing_jobs',
       },
     })),
   });
@@ -46,7 +47,8 @@ describe('QueueService', () => {
     moduleRef = await Test.createTestingModule({
       providers: [
         QueueService,
-        { provide: ConfigService, useValue: mockConfig(undefined) },
+        // Provide a URL so the service does not no-op and instead throws due to missing channel
+        { provide: ConfigService, useValue: mockConfig('amqp://guest:guest@localhost:5672//') },
       ],
     }).compile();
 
