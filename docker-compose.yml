@@ -39,7 +39,7 @@ services:
     command: bash -lc "python -m uvicorn app.embed_server:app --host 0.0.0.0 --port 8000"
     environment:
       ENGINE_MODEL_NAME: stub-miniLM
-      ENGINE_DIM: 384
+      ENGINE_DIM: 1536
     ports:
       - "8000:8000"
     depends_on: []
@@ -61,7 +61,7 @@ services:
       AWS_S3_FORCE_PATH_STYLE: "true"
       ENGINE_VERSION: oracle-v2
       ENGINE_MODEL_NAME: stub-miniLM
-      ENGINE_DIM: 384
+      ENGINE_DIM: 1536
       LOG_LEVEL: INFO
       S3_BUCKET: studyapp-docs
     depends_on:

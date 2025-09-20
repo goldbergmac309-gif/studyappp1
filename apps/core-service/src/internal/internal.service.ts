@@ -56,8 +56,8 @@ export class InternalService {
     });
     if (!doc) throw new NotFoundException('Document not found for subject');
 
-    // Enforce pgvector column dimension (Embedding.embedding is vector(384))
-    const EXPECTED_DIM = 384;
+    // Enforce pgvector column dimension (Embedding.embedding is vector(1536))
+    const EXPECTED_DIM = 1536;
     if (dto.dim !== EXPECTED_DIM) {
       throw new BadRequestException(
         `Embedding dim must be ${EXPECTED_DIM}; received ${dto.dim}`,
