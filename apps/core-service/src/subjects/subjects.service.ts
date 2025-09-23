@@ -19,11 +19,21 @@ export class SubjectsService {
     private embed: EmbeddingService,
   ) {}
 
+  // Simple in-memory rate limiter per user for search endpoint
+  // windowMs: 10s, maxRequests: 30
+  private readonly searchRate: Map<
+    string,
+    { count: number; windowStart: number }
+  > = new Map();
+  private readonly RATE_WINDOW_MS = 10_000;
+  private readonly RATE_MAX = 30;
+
   private subjectBaseSelect = {
     id: true,
     name: true,
     createdAt: true,
     updatedAt: true,
+    lastAccessedAt: true,
     courseCode: true,
     professorName: true,
     ambition: true,
@@ -51,6 +61,8 @@ export class SubjectsService {
   async findAllByUser(
     userId: string,
     filter: 'recent' | 'all' | 'starred' | 'archived' = 'recent',
+    page = 1,
+    pageSize = 50,
   ): Promise<Subject[]> {
     const where: Prisma.SubjectWhereInput = { userId };
     if (filter === 'archived') {
@@ -60,22 +72,43 @@ export class SubjectsService {
       where.archivedAt = null;
       if (filter === 'starred') where.starred = true;
       if (filter === 'recent') {
-        const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-        where.createdAt = { gte: twoWeeksAgo };
+        const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+        // Consider items accessed or created within the window
+        where.OR = [
+          { lastAccessedAt: { gte: cutoff } },
+          { AND: [{ lastAccessedAt: null }, { createdAt: { gte: cutoff } }] },
+        ];
       }
     }
+
+    const take = Math.min(Math.max(pageSize, 1), 100);
+    const skip = Math.max((Math.max(page, 1) - 1) * take, 0);
+    const orderBy =
+      filter === 'recent'
+        ? [{ lastAccessedAt: 'desc' as const }, { createdAt: 'desc' as const }]
+        : [{ createdAt: 'desc' as const }];
+
     return this.prisma.subject.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       select: this.subjectBaseSelect,
+      skip,
+      take,
     });
   }
 
   async findOneForUser(id: string, userId: string): Promise<Subject | null> {
-    return this.prisma.subject.findFirst({
+    const exists = await this.prisma.subject.findFirst({
       where: { id, userId, archivedAt: null },
+      select: { id: true },
+    });
+    if (!exists) return null;
+    const updated = await this.prisma.subject.update({
+      where: { id },
+      data: { lastAccessedAt: new Date() },
       select: this.subjectBaseSelect,
     });
+    return updated;
   }
 
   async updateSubject(
@@ -175,10 +208,23 @@ export class SubjectsService {
     });
     if (!subject) throw new NotFoundException('Subject not found');
 
+    // Rate limit per-user
+    const now = Date.now();
+    const rl = this.searchRate.get(userId);
+    if (!rl || now - rl.windowStart > this.RATE_WINDOW_MS) {
+      this.searchRate.set(userId, { count: 1, windowStart: now });
+    } else {
+      rl.count += 1;
+      if (rl.count > this.RATE_MAX) {
+        throw new BadRequestException('Rate limit exceeded');
+      }
+    }
+
     const q = (dto.query || '').trim();
     if (q.length < 2)
       throw new BadRequestException('query must be at least 2 characters');
     const k = Math.min(Math.max(dto.k ?? 20, 1), 100);
+    const offset = Math.min(Math.max(dto.offset ?? 0, 0), 10_000);
     // Interpret threshold as cosine similarity and convert to cosine distance
     // In pgvector, <=> is cosine distance: d = 1 - cosine_similarity in [0,2]
     // We bound similarity to [0,1] (ignore negative similarities in filtering)
@@ -214,7 +260,7 @@ export class SubjectsService {
         JOIN "Document" d ON c."documentId" = d."id"
         WHERE d."subjectId" = '${subjectId}'
         ORDER BY e."embedding" <=> ('${vectorLiteral}')::vector ASC
-        LIMIT ${k}
+        LIMIT ${k} OFFSET ${offset}
       `;
       rows = await this.prisma.$queryRawUnsafe<
         Array<{
@@ -238,7 +284,7 @@ export class SubjectsService {
         WHERE d."subjectId" = '${subjectId}'
           AND (e."embedding" <=> ('${vectorLiteral}')::vector) <= ${maxDist}
         ORDER BY e."embedding" <=> ('${vectorLiteral}')::vector ASC
-        LIMIT ${k}
+        LIMIT ${k} OFFSET ${offset}
       `;
       rows = await this.prisma.$queryRawUnsafe<
         Array<{
@@ -264,7 +310,7 @@ export class SubjectsService {
         JOIN "DocumentChunk" c ON c."documentId" = d."id"
         WHERE d."subjectId" = '${subjectId}'
         ORDER BY c."index" ASC
-        LIMIT ${k}
+        LIMIT ${k} OFFSET ${offset}
       `;
       rows = await this.prisma.$queryRawUnsafe<
         Array<{

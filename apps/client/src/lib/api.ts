@@ -49,6 +49,57 @@ api.interceptors.response.use(
   }
 )
 
+// Exams (Prophetic Exam Generator)
+export type ExamStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED'
+export interface ExamPaperDto {
+  id: string
+  subjectId: string
+  status: ExamStatus
+  params?: Record<string, unknown>
+  result?: Record<string, unknown>
+  createdAt?: string
+  updatedAt?: string
+}
+
+export async function generateExam(
+  subjectId: string,
+  payload: { numQuestions?: number; difficulty?: 'EASY' | 'MEDIUM' | 'HARD'; includeCitations?: boolean } = {},
+  options: { signal?: AbortSignal } = {},
+): Promise<{ examId: string; status: 'queued' }>
+{
+  try {
+    const res = await api.post<{ examId: string; status: 'queued' }>(
+      `/subjects/${encodeURIComponent(subjectId)}/exams/generate`,
+      payload,
+      { signal: options.signal },
+    )
+    return res.data
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === 'ERR_CANCELED') throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function getExam(
+  examId: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<ExamPaperDto>
+{
+  try {
+    const res = await api.get<ExamPaperDto>(`/exams/${encodeURIComponent(examId)}`, { signal: options.signal })
+    return res.data
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === 'ERR_CANCELED') throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
 // Notes API (Epoch I, Sprint 2)
 export async function listNotes(
   subjectId: string,
@@ -81,7 +132,7 @@ export async function listNotes(
 
 export async function createNote(
   subjectId: string,
-  payload: { title: string; content?: any },
+  payload: { title: string; content?: unknown },
   options: { signal?: AbortSignal } = {},
 ): Promise<NoteDto> {
   try {
@@ -123,7 +174,7 @@ export async function getNote(
 export async function updateNote(
   subjectId: string,
   noteId: string,
-  payload: { title?: string; content?: any },
+  payload: { title?: string; content?: unknown },
   options: { signal?: AbortSignal } = {},
 ): Promise<NoteDto> {
   try {
@@ -458,10 +509,14 @@ export default api
 
 export async function listSubjects(
   filter: 'recent' | 'all' | 'starred' | 'archived' = 'recent',
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; page?: number; pageSize?: number } = {},
 ): Promise<Subject[]> {
   try {
-    const res = await api.get<Subject[]>(`/subjects`, { params: { filter }, signal: options.signal })
+    const { signal, page, pageSize } = options
+    const params: Record<string, unknown> = { filter }
+    if (typeof page === 'number') params.page = page
+    if (typeof pageSize === 'number') params.pageSize = pageSize
+    const res = await api.get<Subject[]>(`/subjects`, { params, signal })
     return Array.isArray(res.data) ? res.data : []
   } catch (err) {
     if (axios.isAxiosError(err)) {
