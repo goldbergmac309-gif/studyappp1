@@ -32,6 +32,109 @@ describe('Subjects (e2e)', () => {
     await app.init();
   });
 
+  describe('Pagination & Recency (lastAccessedAt)', () => {
+    it('GET /subjects supports page & pageSize and orders by createdAt desc by default', async () => {
+      const signup = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'paginate@test.com', password: 'password123' })
+        .expect(201);
+      const token = signup.body.accessToken as string;
+
+      // Create 7 subjects
+      const names = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7'];
+      for (const n of names) {
+        await request(app.getHttpServer())
+          .post('/subjects')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ name: n })
+          .expect(201);
+      }
+
+      // Page 1 size 3 -> latest 3 (S7,S6,S5)
+      const p1 = await request(app.getHttpServer())
+        .get('/subjects')
+        .query({ page: 1, pageSize: 3 })
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(p1.body).toHaveLength(3);
+      const p1names = (p1.body as Array<{ name: string }>).map((s) => s.name);
+      expect(p1names).toEqual(['S7', 'S6', 'S5']);
+
+      // Page 2 -> next 3 (S4,S3,S2)
+      const p2 = await request(app.getHttpServer())
+        .get('/subjects')
+        .query({ page: 2, pageSize: 3 })
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(p2.body).toHaveLength(3);
+      const p2names = (p2.body as Array<{ name: string }>).map((s) => s.name);
+      expect(p2names).toEqual(['S4', 'S3', 'S2']);
+
+      // Page 3 -> remaining (S1)
+      const p3 = await request(app.getHttpServer())
+        .get('/subjects')
+        .query({ page: 3, pageSize: 3 })
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const p3names = (p3.body as Array<{ name: string }>).map((s) => s.name);
+      expect(p3names).toEqual(['S1']);
+    });
+
+    it('recent filter uses lastAccessedAt; viewing a subject bumps it into recent even if old', async () => {
+      const signup = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({ email: 'lastaccessed@test.com', password: 'password123' })
+        .expect(201);
+      const token = signup.body.accessToken as string;
+
+      // Create two subjects
+      await request(app.getHttpServer())
+        .post('/subjects')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'FreshNow' })
+        .expect(201);
+      const old = await request(app.getHttpServer())
+        .post('/subjects')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'VeryOld' })
+        .expect(201);
+
+      // Backdate the OLD one to 30 days ago
+      const id = old.body.id as string;
+      const iso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      await prisma.$executeRawUnsafe(
+        `UPDATE "Subject" SET "createdAt" = '${iso}', "lastAccessedAt" = NULL WHERE "id" = '${id}'`,
+      );
+
+      // recent -> should include FreshNow, exclude VeryOld
+      const before = await request(app.getHttpServer())
+        .get('/subjects')
+        .query({ filter: 'recent' })
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const beforeNames = (before.body as Array<{ name: string }>).map(
+        (s) => s.name,
+      );
+      expect(beforeNames).toContain('FreshNow');
+      expect(beforeNames).not.toContain('VeryOld');
+
+      // View VeryOld -> bumps lastAccessedAt to now
+      await request(app.getHttpServer())
+        .get(`/subjects/${old.body.id as string}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      // recent -> should now include VeryOld
+      const after = await request(app.getHttpServer())
+        .get('/subjects')
+        .query({ filter: 'recent' })
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const afterNames = (after.body as Array<{ name: string }>).map((s) => s.name);
+      expect(afterNames).toContain('VeryOld');
+    });
+  });
+
   describe('GET /subjects/:id', () => {
     it('should return 401 without JWT', async () => {
       await request(app.getHttpServer()).get('/subjects/some-id').expect(401);

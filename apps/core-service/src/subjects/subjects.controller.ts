@@ -38,8 +38,17 @@ export class SubjectsController {
   findAll(
     @Request() req: AuthRequest,
     @Query('filter') filter?: 'recent' | 'all' | 'starred' | 'archived',
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    return this.subjectsService.findAllByUser(req.user.id, filter ?? 'recent');
+    const p = Number.isFinite(Number(page)) ? Number(page) : 1;
+    const ps = Number.isFinite(Number(pageSize)) ? Number(pageSize) : 50;
+    return this.subjectsService.findAllByUser(
+      req.user.id,
+      filter ?? 'recent',
+      p,
+      ps,
+    );
   }
 
   @Get(':id')
