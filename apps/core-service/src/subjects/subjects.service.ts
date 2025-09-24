@@ -192,15 +192,19 @@ export class SubjectsService {
     userId: string,
     subjectId: string,
     dto: SearchDto,
-  ): Promise<
-    Array<{
+  ): Promise<{
+    results: Array<{
       documentId: string;
       documentFilename: string;
       chunkIndex: number;
       snippet: string;
       score: number;
-    }>
-  > {
+      createdAt?: string;
+      updatedAt?: string;
+    }>;
+    nextCursor: string | null;
+    tookMs: number;
+  }> {
     // Ownership check
     const subject = await this.prisma.subject.findFirst({
       where: { id: subjectId, userId, archivedAt: null },
@@ -241,12 +245,15 @@ export class SubjectsService {
     const vectorLiteral = `[${e.embedding.join(',')}]`;
 
     // Execute pgvector similarity with parameterized vector cast
+    const start = Date.now();
     let rows: Array<{
       documentId: string;
       documentFilename: string;
       chunkIndex: number;
       snippet: string;
       score: number;
+      createdAt?: Date;
+      updatedAt?: Date;
     }> = [];
     if (dto.threshold === undefined) {
       const sql = `
@@ -254,7 +261,9 @@ export class SubjectsService {
                d."filename" AS "documentFilename",
                c."index" AS "chunkIndex",
                c."text" AS "snippet",
-               1 - (e."embedding" <=> ('${vectorLiteral}')::vector) AS "score"
+               1 - (e."embedding" <=> ('${vectorLiteral}')::vector) AS "score",
+               c."createdAt" AS "createdAt",
+               c."updatedAt" AS "updatedAt"
         FROM "Embedding" e
         JOIN "DocumentChunk" c ON e."chunkId" = c."id"
         JOIN "Document" d ON c."documentId" = d."id"
@@ -269,6 +278,8 @@ export class SubjectsService {
           chunkIndex: number;
           snippet: string;
           score: number;
+          createdAt?: Date;
+          updatedAt?: Date;
         }>
       >(sql);
     } else {
@@ -277,7 +288,9 @@ export class SubjectsService {
                d."filename" AS "documentFilename",
                c."index" AS "chunkIndex",
                c."text" AS "snippet",
-               1 - (e."embedding" <=> ('${vectorLiteral}')::vector) AS "score"
+               1 - (e."embedding" <=> ('${vectorLiteral}')::vector) AS "score",
+               c."createdAt" AS "createdAt",
+               c."updatedAt" AS "updatedAt"
         FROM "Embedding" e
         JOIN "DocumentChunk" c ON e."chunkId" = c."id"
         JOIN "Document" d ON c."documentId" = d."id"
@@ -293,6 +306,8 @@ export class SubjectsService {
           chunkIndex: number;
           snippet: string;
           score: number;
+          createdAt?: Date;
+          updatedAt?: Date;
         }>
       >(sql);
     }
@@ -305,7 +320,9 @@ export class SubjectsService {
                d."filename" AS "documentFilename",
                c."index" AS "chunkIndex",
                c."text" AS "snippet",
-               0::float AS "score"
+               0::float AS "score",
+               c."createdAt" AS "createdAt",
+               c."updatedAt" AS "updatedAt"
         FROM "Document" d
         JOIN "DocumentChunk" c ON c."documentId" = d."id"
         WHERE d."subjectId" = '${subjectId}'
@@ -319,42 +336,61 @@ export class SubjectsService {
           chunkIndex: number;
           snippet: string;
           score: number;
+          createdAt?: Date;
+          updatedAt?: Date;
         }>
       >(fallbackSql);
     }
 
-    return rows;
+    const tookMs = Date.now() - start;
+    const results = rows.map((r) => ({
+      documentId: r.documentId,
+      documentFilename: r.documentFilename,
+      chunkIndex: r.chunkIndex,
+      snippet: r.snippet,
+      score: r.score,
+      createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : undefined,
+      updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : undefined,
+    }));
+    return { results, nextCursor: null, tookMs } as const;
   }
 
   async getSubjectTopics(
     userId: string,
     subjectId: string,
-  ): Promise<
-    Array<{
+  ): Promise<{
+    topics: Array<{
       label: string;
       weight: number;
       terms: Array<{ term: string; score: number }>;
       documentIds?: string[];
-    }>
-  > {
+    }>;
+    computedAt: string;
+    version: string;
+  }> {
     const subject = await this.prisma.subject.findFirst({
       where: { id: subjectId, userId },
       select: { id: true },
     });
     if (!subject) throw new NotFoundException('Subject not found');
 
-    const topics = await this.prisma.subjectTopics.findUnique({
+    const row = await this.prisma.subjectTopics.findUnique({
       where: { subjectId },
-      select: { topics: true },
+      select: { topics: true, updatedAt: true, engineVersion: true },
     });
-    if (!topics) {
+    if (!row) {
       throw new NotFoundException('Topics not found');
     }
-    return topics.topics as unknown as Array<{
+    const topics = row.topics as unknown as Array<{
       label: string;
       weight: number;
       terms: Array<{ term: string; score: number }>;
       documentIds?: string[];
     }>;
+    return {
+      topics,
+      computedAt: new Date(row.updatedAt).toISOString(),
+      version: row.engineVersion,
+    };
   }
 }
