@@ -98,7 +98,25 @@ export interface BoardConfigDto {
   grid?: { margin?: number; rowHeight?: number; snap?: boolean }
 }
 
-// Epoch II/V2: Semantic Search contracts
+// Epoch II/V2: Semantic Search contracts (v2 envelope)
+export interface SubjectSearchResult {
+  id?: string // optional for now if chunk id not exposed
+  documentId: string
+  documentFilename: string
+  chunkIndex: number
+  snippet: string
+  score: number // normalized [0..1]
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface SubjectSearchResponse {
+  results: SubjectSearchResult[]
+  nextCursor: string | null
+  tookMs: number
+}
+
+// Legacy (kept for backward compatibility in older code paths)
 export interface SemanticSearchHit {
   documentId: string
   documentFilename: string
@@ -122,7 +140,13 @@ export interface SubjectTopic {
   documentIds?: string[]
 }
 
-export type SubjectTopicsResponse = SubjectTopic[]
+export interface SubjectTopicsEnvelope {
+  topics: SubjectTopic[]
+  computedAt: string
+  version: string
+}
+
+export type SubjectTopicsResponse = SubjectTopicsEnvelope
 
 // Epoch I, Sprint 2: Notes contracts
 export interface NoteDto {

@@ -82,10 +82,11 @@ export default function InsightsTab() {
     if (!id) return
     const ac = new AbortController()
     getSubjectTopics(id, { signal: ac.signal })
-      .then((topics) => {
-        const terms = Array.isArray(topics)
-          ? topics.map((t) => ({ term: t.label, score: t.weight }))
-          : []
+      .then((data) => {
+        const topics = Array.isArray((data as any)?.topics)
+          ? (data as any).topics
+          : (Array.isArray(data) ? data : [])
+        const terms = topics.map((t: { label: string; weight: number }) => ({ term: t.label, score: t.weight }))
         setTopicTerms(terms)
       })
       .catch(() => setTopicTerms([]))

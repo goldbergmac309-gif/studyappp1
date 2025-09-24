@@ -110,9 +110,10 @@ describe('Semantic Search (e2e)', () => {
       .query({ query: 'algebra test', k: 5, threshold: 0 })
       .expect(200);
 
-    expect(Array.isArray(res.body)).toBe(true);
-    expect(res.body.length).toBeGreaterThanOrEqual(1);
-    const hit = res.body[0];
+    expect(res.body && typeof res.body === 'object').toBe(true);
+    expect(Array.isArray(res.body.results)).toBe(true);
+    expect(typeof res.body.tookMs).toBe('number');
+    const hit = res.body.results[0];
     expect(hit.documentId).toBe(doc.id);
     expect(hit.documentFilename).toBe('doc1.pdf');
     expect(typeof hit.snippet).toBe('string');

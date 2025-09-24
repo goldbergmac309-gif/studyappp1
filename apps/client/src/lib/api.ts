@@ -219,11 +219,16 @@ export async function semanticSearch(
 ): Promise<SemanticSearchResponse> {
   const { query, k, threshold, signal } = params
   try {
-    const res = await api.get<SemanticSearchResponse>(
+    const res = await api.get<any>(
       `/subjects/${encodeURIComponent(subjectId)}/search`,
       { params: { query, k, threshold }, signal },
     )
-    return Array.isArray(res.data) ? res.data : []
+    const data = res.data as unknown
+    if (Array.isArray(data)) return data as SemanticSearchResponse
+    if (data && typeof data === "object" && Array.isArray((data as any).results)) {
+      return (data as any).results as SemanticSearchResponse
+    }
+    return []
   } catch (err) {
     if (axios.isAxiosError(err)) {
       if ((err as AxiosError).code === "ERR_CANCELED") throw err
@@ -239,14 +244,20 @@ export async function getSubjectTopics(
   options: { signal?: AbortSignal } = {},
 ): Promise<SubjectTopicsResponse> {
   try {
-    const res = await api.get<SubjectTopicsResponse>(
+    const res = await api.get<any>(
       `/subjects/${encodeURIComponent(subjectId)}/topics`,
       { signal: options.signal },
     )
-    return Array.isArray(res.data) ? res.data : []
+    // v2 envelope: { topics: [], computedAt, version } but support legacy []
+    const data = res.data
+    if (Array.isArray(data)) {
+      return { topics: data, computedAt: new Date().toISOString(), version: "mock" }
+    }
+    if (data && typeof data === "object") return data as SubjectTopicsResponse
+    return { topics: [], computedAt: new Date(0).toISOString(), version: "unknown" }
   } catch (err) {
     if (axios.isAxiosError(err)) {
-      if (err.response?.status === 404) return []
+      if (err.response?.status === 404) return { topics: [], computedAt: new Date(0).toISOString(), version: "unknown" }
       if ((err as AxiosError).code === "ERR_CANCELED") throw err
       throw new Error(extractErrorMessage(err))
     }
