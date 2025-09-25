@@ -8,8 +8,8 @@ import { EmbeddingService } from '../src/subjects/embedding.service';
 
 class FakeEmbeddingService {
   embedText(text: string) {
-    // deterministic 384-d vector based on input length
-    const dim = 384;
+    // deterministic 1536-d vector based on input length
+    const dim = 1536;
     const base = (text?.length || 1) % 17;
     const v = Array.from({ length: dim }, (_, i) => ((i + base) % 13) / 100);
     return Promise.resolve({ model: 'stub-miniLM', dim, embedding: v });
@@ -89,7 +89,7 @@ describe('Semantic Search (e2e)', () => {
       index: 0,
       text: 'This is a test chunk containing algebra and calculus.',
       tokens: 8,
-      embedding: Array.from({ length: 384 }, (_, i) => (i % 13) / 100), // matches FakeEmbeddingService for a given length
+      embedding: Array.from({ length: 1536 }, (_, i) => (i % 13) / 100), // matches FakeEmbeddingService for a given length
     };
 
     await request(app.getHttpServer())
@@ -98,7 +98,7 @@ describe('Semantic Search (e2e)', () => {
       .send({
         documentId: doc.id,
         model: 'stub-miniLM',
-        dim: 384,
+        dim: 1536,
         chunks: [chunk],
       })
       .expect(200);
@@ -110,9 +110,10 @@ describe('Semantic Search (e2e)', () => {
       .query({ query: 'algebra test', k: 5, threshold: 0 })
       .expect(200);
 
-    expect(Array.isArray(res.body)).toBe(true);
-    expect(res.body.length).toBeGreaterThanOrEqual(1);
-    const hit = res.body[0];
+    expect(res.body && typeof res.body === 'object').toBe(true);
+    expect(Array.isArray(res.body.results)).toBe(true);
+    expect(typeof res.body.tookMs).toBe('number');
+    const hit = res.body.results[0];
     expect(hit.documentId).toBe(doc.id);
     expect(hit.documentFilename).toBe('doc1.pdf');
     expect(typeof hit.snippet).toBe('string');

@@ -60,9 +60,7 @@ describe('Notes (e2e)', () => {
   };
 
   it('requires JWT for all endpoints', async () => {
-    await request(app.getHttpServer())
-      .get('/subjects/any/notes')
-      .expect(401);
+    await request(app.getHttpServer()).get('/subjects/any/notes').expect(401);
 
     await request(app.getHttpServer())
       .post('/subjects/any/notes')
@@ -105,7 +103,15 @@ describe('Notes (e2e)', () => {
     const createRes = await request(app.getHttpServer())
       .post(`/subjects/${subjectId}/notes`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ title: 'Untitled', content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }] } })
+      .send({
+        title: 'Untitled',
+        content: {
+          type: 'doc',
+          content: [
+            { type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] },
+          ],
+        },
+      })
       .expect(201);
     const noteId = (createRes.body as { id: string }).id;
 
@@ -130,7 +136,15 @@ describe('Notes (e2e)', () => {
     await request(app.getHttpServer())
       .patch(`/subjects/${subjectId}/notes/${noteId}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ title: 'Renamed', content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'World' }] }] } })
+      .send({
+        title: 'Renamed',
+        content: {
+          type: 'doc',
+          content: [
+            { type: 'paragraph', content: [{ type: 'text', text: 'World' }] },
+          ],
+        },
+      })
       .expect(200);
 
     // Ensure version created and list sorting by updatedAt

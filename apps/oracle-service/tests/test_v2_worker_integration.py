@@ -23,7 +23,7 @@ def test_v2_reindex_end_to_end_with_mocks(monkeypatch):
     monkeypatch.setenv("CORE_SERVICE_URL", core_url)
     monkeypatch.setenv("INTERNAL_API_KEY", api_key)
     monkeypatch.setenv("ENGINE_MODEL_NAME", "stub-miniLM")
-    monkeypatch.setenv("ENGINE_DIM", "384")
+    monkeypatch.setenv("ENGINE_DIM", "1536")
     monkeypatch.setenv("REINDEX_BATCH_SIZE", "250")
 
     # Reset cached settings to pick up env vars
@@ -33,11 +33,11 @@ def test_v2_reindex_end_to_end_with_mocks(monkeypatch):
     def fake_chunk_and_embed(_self: Any, _pdf_bytes: bytes, _doc_id: str):
         return {
             "model": "stub-miniLM",
-            "dim": 384,
+            "dim": 1536,
             "chunks": [
-                {"index": 0, "text": "A", "embedding": [0.0] * 384, "tokens": 1},
-                {"index": 1, "text": "B", "embedding": [0.1] * 384, "tokens": 1},
-                {"index": 2, "text": "C", "embedding": [0.2] * 384, "tokens": 1},
+                {"index": 0, "text": "A", "embedding": [0.0] * 1536, "tokens": 1},
+                {"index": 1, "text": "B", "embedding": [0.1] * 1536, "tokens": 1},
+                {"index": 2, "text": "C", "embedding": [0.2] * 1536, "tokens": 1},
             ],
         }
 
@@ -88,5 +88,5 @@ def test_v2_reindex_end_to_end_with_mocks(monkeypatch):
             # Validate body shape
             body = json.loads(req.text or "{}")
             assert body["documentId"] == doc_id
-            assert body["dim"] == 384
+            assert body["dim"] == 1536
             assert isinstance(body["chunks"], list) and len(body["chunks"]) == 3

@@ -32,6 +32,7 @@ model Subject {
   color         String?
   starred       Boolean  @default(false)
   archivedAt    DateTime?
+  lastAccessedAt DateTime?
 
   // Relation to User (owner)
   userId String
@@ -42,6 +43,8 @@ model Subject {
   topics     SubjectTopics?
   // Notes (Epoch I, Sprint 2)
   notes      Note[]
+  // Exams (Epoch II Prophetic Exam Generator)
+  examPapers ExamPaper[]
 
   // Workspace extensions (Epoch III)
   blueprintId  String?
@@ -110,7 +113,7 @@ model Embedding {
 
   model     String
   dim       Int
-  embedding Unsupported("vector(384)")
+  embedding Unsupported("vector(1536)")
 
   createdAt DateTime @default(now())
 }
@@ -204,4 +207,25 @@ model SubjectTopics {
   updatedAt     DateTime @updatedAt
 
   subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+// --- Exams (Prophetic Exam Generator) ---
+enum ExamStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+model ExamPaper {
+  id        String      @id @default(cuid())
+  subjectId String
+  subject   Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  status    ExamStatus  @default(PENDING)
+  params    Json?
+  result    Json?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([subjectId])
 }

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { useDebouncedBool } from "@/lib/hooks/useDebouncedBool"
 import { useRelativeTime } from "@/lib/hooks/useRelativeTime"
 import { getSubjectTopics } from "@/lib/api"
+import type { SubjectTopic } from "@studyapp/shared-types"
 
 export default function InsightsTab() {
   const router = useRouter()
@@ -75,17 +76,19 @@ export default function InsightsTab() {
 
   const pollLastUpdatedText = useRelativeTime(lastUpdatedAt)
 
-  // Fetch V2 topics at subject-level and map to word cloud terms
-  const [topicTerms, setTopicTerms] = React.useState<Array<{ term: string; score: number }>>([])
+  // Fetch V2 topics at subject-level and pass as envelope to TopicHeatMap
+  const [topicTerms, setTopicTerms] = React.useState<Array<{ term: string; score: number }>>([]) // legacy fallback
+  const [topics, setTopics] = React.useState<SubjectTopic[]>([])
   React.useEffect(() => {
     const id = String(subjectId || "")
     if (!id) return
     const ac = new AbortController()
     getSubjectTopics(id, { signal: ac.signal })
-      .then((topics) => {
-        const terms = Array.isArray(topics)
-          ? topics.map((t) => ({ term: t.label, score: t.weight }))
-          : []
+      .then((data) => {
+        const list: SubjectTopic[] = Array.isArray(data.topics) ? data.topics : []
+        setTopics(list)
+        // Populate legacy fallback list for CssWordCloud when needed
+        const terms = list.map((t) => ({ term: t.label, score: t.weight }))
         setTopicTerms(terms)
       })
       .catch(() => setTopicTerms([]))
@@ -234,7 +237,7 @@ export default function InsightsTab() {
             <CardDescription>Key conceptual topics across this subject.</CardDescription>
           </CardHeader>
           <CardContent>
-            <TopicHeatMap terms={topicTerms.length ? topicTerms : undefined} />
+            <TopicHeatMap topics={topics.length ? topics : undefined} terms={topicTerms.length ? topicTerms : undefined} />
           </CardContent>
         </Card>
       </div>
