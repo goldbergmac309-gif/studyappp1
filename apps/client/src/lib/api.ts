@@ -19,6 +19,8 @@ import type {
   SemanticSearchResponse,
   SubjectTopicsResponse,
   NoteDto,
+  SubjectSearchResponse,
+  SubjectTopic,
 } from "@studyapp/shared-types"
 
 // Create a singleton Axios instance configured for the client app.
@@ -219,14 +221,14 @@ export async function semanticSearch(
 ): Promise<SemanticSearchResponse> {
   const { query, k, threshold, signal } = params
   try {
-    const res = await api.get<any>(
+    const res = await api.get<SemanticSearchResponse | SubjectSearchResponse>(
       `/subjects/${encodeURIComponent(subjectId)}/search`,
       { params: { query, k, threshold }, signal },
     )
-    const data = res.data as unknown
-    if (Array.isArray(data)) return data as SemanticSearchResponse
-    if (data && typeof data === "object" && Array.isArray((data as any).results)) {
-      return (data as any).results as SemanticSearchResponse
+    const data = res.data
+    if (Array.isArray(data)) return data
+    if (data && typeof data === "object" && Array.isArray((data as SubjectSearchResponse).results)) {
+      return (data as SubjectSearchResponse).results as unknown as SemanticSearchResponse
     }
     return []
   } catch (err) {
@@ -244,7 +246,7 @@ export async function getSubjectTopics(
   options: { signal?: AbortSignal } = {},
 ): Promise<SubjectTopicsResponse> {
   try {
-    const res = await api.get<any>(
+    const res = await api.get<SubjectTopicsResponse | SubjectTopic[]>(
       `/subjects/${encodeURIComponent(subjectId)}/topics`,
       { signal: options.signal },
     )
@@ -253,7 +255,7 @@ export async function getSubjectTopics(
     if (Array.isArray(data)) {
       return { topics: data, computedAt: new Date().toISOString(), version: "mock" }
     }
-    if (data && typeof data === "object") return data as SubjectTopicsResponse
+    if (data && typeof data === "object") return data
     return { topics: [], computedAt: new Date(0).toISOString(), version: "unknown" }
   } catch (err) {
     if (axios.isAxiosError(err)) {

@@ -2,10 +2,12 @@ import { defineConfig, devices } from '@playwright/test'
 
 const CORE_PORT = +(process.env.CORE_PORT || 3001)
 const USE_MOCK = !!process.env.MOCK_CORE
+const USE_PROD = !!process.env.USE_PROD
+const S3_ENDPOINT = process.env.AWS_S3_ENDPOINT || 'http://localhost:9000'
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 120_000,
+  timeout: 300_000,
   expect: {
     timeout: 10_000,
   },
@@ -23,18 +25,43 @@ export default defineConfig({
   },
   // Auto-start dev servers for tests
   webServer: (() => {
-    const servers: any[] = [
+    type WebSrv = { command: string; cwd: string; port: number; reuseExistingServer?: boolean; env?: Record<string, string>; timeout?: number }
+    const clientCommand = USE_PROD ? 'sh -c "pnpm build && pnpm start -p 3100"' : 'pnpm dev'
+    const servers: WebSrv[] = [
       {
-        command: 'pnpm dev',
+        command: clientCommand,
         cwd: __dirname,
         port: 3100,
         reuseExistingServer: true,
         env: {
           NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001',
         },
-        timeout: 120_000,
+        timeout: 300_000,
       },
     ]
+    if (!USE_MOCK) {
+      // Ensure Postgres is available (port 5544) via a Docker-managed container
+      servers.push({
+        command:
+          'bash -lc "docker start studyapp-pg-e2e >/dev/null 2>&1 || docker run -d --name studyapp-pg-e2e -p 5544:5432 -e POSTGRES_DB=studyapp_dev -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres pgvector/pgvector:pg16"',
+        cwd: __dirname,
+        port: 5544,
+        reuseExistingServer: true,
+        timeout: 120_000,
+      })
+
+      // If caller chose an alternate MinIO endpoint on :9002, ensure it is running
+      if (S3_ENDPOINT.includes('localhost:9002') || S3_ENDPOINT.includes('127.0.0.1:9002')) {
+        servers.push({
+          command:
+            'bash -lc "docker start studyapp-minio-e2e >/dev/null 2>&1 || docker run -d --name studyapp-minio-e2e -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin -p 9002:9000 -p 9003:9001 minio/minio:latest server /data --console-address \":9001\""',
+          cwd: __dirname,
+          port: 9002,
+          reuseExistingServer: true,
+          timeout: 120_000,
+        })
+      }
+    }
     if (USE_MOCK) {
       servers.push({
         command: 'node e2e/mocks/mock-core-server.mjs',
@@ -65,16 +92,18 @@ export default defineConfig({
           RABBITMQ_URL: '',
           PORT: String(CORE_PORT),
         },
-        timeout: 120_000,
+        timeout: 300_000,
       })
-      // Start the lightweight FastAPI embed server (requires Python env available)
-      servers.push({
-        command: 'python -m uvicorn app.embed_server:app --host 0.0.0.0 --port 8000',
-        cwd: __dirname + '/../oracle-service',
-        port: 8000,
-        reuseExistingServer: true,
-        timeout: 120_000,
-      })
+      if (!process.env.SKIP_EMBED) {
+        // Start the lightweight FastAPI embed server (requires Python env available)
+        servers.push({
+          command: 'python -m uvicorn app.embed_server:app --host 0.0.0.0 --port 8000',
+          cwd: __dirname + '/../oracle-service',
+          port: 8000,
+          reuseExistingServer: true,
+          timeout: 120_000,
+        })
+      }
     }
     return servers
   })(),
