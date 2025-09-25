@@ -88,15 +88,19 @@ describe('Subject Topics V2 (e2e)', () => {
       .send(payload)
       .expect(200);
 
-    // Public GET returns topics
+    // Public GET returns topics envelope
     const res = await request(app.getHttpServer())
       .get(`/subjects/${subjectId}/topics`)
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
 
-    expect(Array.isArray(res.body)).toBe(true);
-    expect(res.body.length).toBeGreaterThan(0);
-    const labels = (res.body as Array<{ label: string }>).map((t) => t.label);
+    expect(res.body && typeof res.body === 'object').toBe(true);
+    expect(Array.isArray(res.body.topics)).toBe(true);
+    expect(typeof res.body.version).toBe('string');
+    expect(typeof res.body.computedAt).toBe('string');
+    const labels = (res.body.topics as Array<{ label: string }>).map(
+      (t) => t.label,
+    );
     expect(labels).toEqual(expect.arrayContaining(['Algebra', 'Calculus']));
   });
 });

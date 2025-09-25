@@ -19,6 +19,8 @@ import type {
   SemanticSearchResponse,
   SubjectTopicsResponse,
   NoteDto,
+  SubjectSearchResponse,
+  SubjectTopic,
 } from "@studyapp/shared-types"
 
 // Create a singleton Axios instance configured for the client app.
@@ -48,6 +50,57 @@ api.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+// Exams (Prophetic Exam Generator)
+export type ExamStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED'
+export interface ExamPaperDto {
+  id: string
+  subjectId: string
+  status: ExamStatus
+  params?: Record<string, unknown>
+  result?: Record<string, unknown>
+  createdAt?: string
+  updatedAt?: string
+}
+
+export async function generateExam(
+  subjectId: string,
+  payload: { numQuestions?: number; difficulty?: 'EASY' | 'MEDIUM' | 'HARD'; includeCitations?: boolean } = {},
+  options: { signal?: AbortSignal } = {},
+): Promise<{ examId: string; status: 'queued' }>
+{
+  try {
+    const res = await api.post<{ examId: string; status: 'queued' }>(
+      `/subjects/${encodeURIComponent(subjectId)}/exams/generate`,
+      payload,
+      { signal: options.signal },
+    )
+    return res.data
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === 'ERR_CANCELED') throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function getExam(
+  examId: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<ExamPaperDto>
+{
+  try {
+    const res = await api.get<ExamPaperDto>(`/exams/${encodeURIComponent(examId)}`, { signal: options.signal })
+    return res.data
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === 'ERR_CANCELED') throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
 
 // Notes API (Epoch I, Sprint 2)
 export async function listNotes(
@@ -81,7 +134,7 @@ export async function listNotes(
 
 export async function createNote(
   subjectId: string,
-  payload: { title: string; content?: any },
+  payload: { title: string; content?: unknown },
   options: { signal?: AbortSignal } = {},
 ): Promise<NoteDto> {
   try {
@@ -123,7 +176,7 @@ export async function getNote(
 export async function updateNote(
   subjectId: string,
   noteId: string,
-  payload: { title?: string; content?: any },
+  payload: { title?: string; content?: unknown },
   options: { signal?: AbortSignal } = {},
 ): Promise<NoteDto> {
   try {
@@ -168,11 +221,16 @@ export async function semanticSearch(
 ): Promise<SemanticSearchResponse> {
   const { query, k, threshold, signal } = params
   try {
-    const res = await api.get<SemanticSearchResponse>(
+    const res = await api.get<SemanticSearchResponse | SubjectSearchResponse>(
       `/subjects/${encodeURIComponent(subjectId)}/search`,
       { params: { query, k, threshold }, signal },
     )
-    return Array.isArray(res.data) ? res.data : []
+    const data = res.data
+    if (Array.isArray(data)) return data
+    if (data && typeof data === "object" && Array.isArray((data as SubjectSearchResponse).results)) {
+      return (data as SubjectSearchResponse).results as unknown as SemanticSearchResponse
+    }
+    return []
   } catch (err) {
     if (axios.isAxiosError(err)) {
       if ((err as AxiosError).code === "ERR_CANCELED") throw err
@@ -188,14 +246,20 @@ export async function getSubjectTopics(
   options: { signal?: AbortSignal } = {},
 ): Promise<SubjectTopicsResponse> {
   try {
-    const res = await api.get<SubjectTopicsResponse>(
+    const res = await api.get<SubjectTopicsResponse | SubjectTopic[]>(
       `/subjects/${encodeURIComponent(subjectId)}/topics`,
       { signal: options.signal },
     )
-    return Array.isArray(res.data) ? res.data : []
+    // v2 envelope: { topics: [], computedAt, version } but support legacy []
+    const data = res.data
+    if (Array.isArray(data)) {
+      return { topics: data, computedAt: new Date().toISOString(), version: "mock" }
+    }
+    if (data && typeof data === "object") return data
+    return { topics: [], computedAt: new Date(0).toISOString(), version: "unknown" }
   } catch (err) {
     if (axios.isAxiosError(err)) {
-      if (err.response?.status === 404) return []
+      if (err.response?.status === 404) return { topics: [], computedAt: new Date(0).toISOString(), version: "unknown" }
       if ((err as AxiosError).code === "ERR_CANCELED") throw err
       throw new Error(extractErrorMessage(err))
     }
@@ -458,10 +522,14 @@ export default api
 
 export async function listSubjects(
   filter: 'recent' | 'all' | 'starred' | 'archived' = 'recent',
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; page?: number; pageSize?: number } = {},
 ): Promise<Subject[]> {
   try {
-    const res = await api.get<Subject[]>(`/subjects`, { params: { filter }, signal: options.signal })
+    const { signal, page, pageSize } = options
+    const params: Record<string, unknown> = { filter }
+    if (typeof page === 'number') params.page = page
+    if (typeof pageSize === 'number') params.pageSize = pageSize
+    const res = await api.get<Subject[]>(`/subjects`, { params, signal })
     return Array.isArray(res.data) ? res.data : []
   } catch (err) {
     if (axios.isAxiosError(err)) {

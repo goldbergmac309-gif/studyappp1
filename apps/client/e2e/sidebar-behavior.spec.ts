@@ -1,28 +1,14 @@
-import { test, expect, Page } from '@playwright/test'
-
-function uniqueEmail() {
-  const ts = Date.now()
-  return `e2e+sidebar+${ts}@studyapp.dev`
-}
-
-async function signUp(page: Page, email: string, password: string) {
-  await page.goto('/signup')
-  await page.getByPlaceholder('you@example.com').fill(email)
-  await page.getByPlaceholder('Your password').fill(password)
-  await page.getByPlaceholder('Confirm password').fill(password)
-  await page.getByRole('button', { name: 'Create account' }).click()
-  await expect(page.getByText('Account created')).toBeVisible()
-  await expect(page).toHaveURL(/\/dashboard$/)
-}
+import { test, expect } from '@playwright/test'
+import { uniqueEmail, signUpAndGotoDashboard } from './helpers'
 
 test.describe('Sidebar collapse and tooltips', () => {
   test('Collapses/expands and shows tooltips in rail mode', async ({ page, context }) => {
     await context.clearCookies()
 
-    const email = uniqueEmail()
+    const email = uniqueEmail('e2e+sidebar')
     const password = 'password123'
 
-    await signUp(page, email, password)
+    await signUpAndGotoDashboard(page, email, password, { verifyToast: 'soft' })
 
     // Initially expanded: sidebar brand shows full text 'Synapse'
     const sidebar = page.locator('nav')
