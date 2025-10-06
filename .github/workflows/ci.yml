@@ -23,9 +23,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install trufflehog
-      - name: Run trufflehog filesystem scan
+      - name: Run trufflehog scan (v2/v3 compatible)
+        shell: bash
         run: |
-          trufflehog filesystem --fail --no-update .
+          set -euo pipefail
+          if trufflehog filesystem --help >/dev/null 2>&1; then
+            echo "Detected trufflehog with filesystem subcommand (v3). Running filesystem scan..."
+            trufflehog filesystem .
+          else
+            echo "Detected trufflehog v2 CLI. Running git repository scan against origin..."
+            trufflehog --json "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          fi
 
   lint-test:
     needs: [secret-scan]

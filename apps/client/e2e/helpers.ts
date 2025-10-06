@@ -2,6 +2,7 @@ import { expect, Page } from '@playwright/test'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001'
 const IS_MOCK = !!process.env.MOCK_CORE
+const CLIENT_BASE = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3100'
 
 export function uniqueEmail(prefix: string = 'e2e') {
   const ts = Date.now()
@@ -25,6 +26,20 @@ export async function clearClientState(page: Page) {
   }
 }
 
+async function waitForClientReady(attempts = 120, delayMs = 1000) {
+  let lastErr: unknown
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(CLIENT_BASE, { method: 'GET' })
+      if (res.ok) return
+    } catch (e) {
+      lastErr = e
+    }
+    await new Promise((r) => setTimeout(r, delayMs))
+  }
+  throw lastErr || new Error('Client did not become ready')
+}
+
 export async function ensureAtDashboard(page: Page) {
   try {
     await expect(page).toHaveURL(/\/dashboard$/)
@@ -45,6 +60,7 @@ export async function signUpAndGotoDashboard(
 ) {
   const { verifyToast = 'soft' } = options
   if (IS_MOCK) {
+    try { await waitForClientReady(60, 500) } catch {}
     const token = 'test-token'
     await page.addInitScript((t) => {
       try { window.localStorage.setItem('studyapp-auth', JSON.stringify({ token: t, state: { token: t } })) } catch {}
