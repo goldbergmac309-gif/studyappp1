@@ -66,3 +66,4 @@ apps/core-service/coverage/
 apps/core-service/.env
 apps/core-service/prisma/*.db
 **/*.tsbuildinfo
+apps/**/.env
