@@ -1,0 +1,13 @@
+^\.github/workflows/ci\.yml$
+^docker-compose\.yml$
+^apps/core-service/\.env\.example$
+^apps/oracle-service/\.env\.example$
+^apps/.*/test/.*
+^apps/.*/tests/.*
+^apps/client/.*
+^node_modules/.*
+^public/.*
+^.*\.lock$
+^pnpm-lock\.yaml$
+^test_auth\.sh$
+^test_auth\.sh\.save$
