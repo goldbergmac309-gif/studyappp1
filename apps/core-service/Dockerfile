@@ -9,7 +9,7 @@ WORKDIR /app
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY apps/core-service/package.json apps/core-service/
 COPY packages/shared-types/package.json packages/shared-types/
-RUN pnpm -w install --frozen-lockfile
+RUN pnpm -r install --frozen-lockfile
 
 # Build
 COPY . .
