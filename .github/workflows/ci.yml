@@ -18,7 +18,7 @@ jobs:
       - name: Run trufflehog filesystem scan (Docker)
         run: |
           docker run --rm -v ${{ github.workspace }}:/repo -w /repo trufflesecurity/trufflehog:latest \
-            filesystem --only-verified --fail --exclude-paths /repo/.trufflehog-exclude.txt /repo
+            filesystem --only-verified --fail /repo
 
   trivy-scan:
     needs: [secret-scan]
