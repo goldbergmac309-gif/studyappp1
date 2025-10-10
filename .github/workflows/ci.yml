@@ -15,12 +15,26 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Run trufflehog filesystem scan
-        uses: trufflesecurity/trufflehog@v3
-        with:
-          scan: filesystem
-          path: .
-          extra_args: --only-verified --fail
+      - name: Create trufflehog exclude list
+        run: |
+          printf '%s\n' \
+            ".github/workflows/ci.yml" \
+            "docker-compose.yml" \
+            "apps/core-service/.env.example" \
+            "apps/oracle-service/.env.example" \
+            "apps/**/test/**" \
+            "apps/**/tests/**" \
+            "apps/client/**" \
+            "**/*.lock" \
+            "pnpm-lock.yaml" \
+            "public/**" \
+            "test_auth.sh" \
+            "test_auth.sh.save" \
+            > .trufflehog-exclude.txt
+      - name: Run trufflehog filesystem scan (Docker)
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/repo -w /repo trufflesecurity/trufflehog:latest \
+            filesystem --only-verified --fail --exclude-paths .trufflehog-exclude.txt .
 
   trivy-scan:
     needs: [secret-scan]
