@@ -33,9 +33,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Build core-service image
-        run: docker build -t studyapp/core-service:ci apps/core-service
+        run: docker build -t studyapp/core-service:ci -f apps/core-service/Dockerfile .
       - name: Build oracle-service image
-        run: docker build -t studyapp/oracle-service:ci apps/oracle-service
+        run: docker build -t studyapp/oracle-service:ci -f apps/oracle-service/Dockerfile .
       - name: Trivy scan core-service image
         uses: aquasecurity/trivy-action@0.24.0
         with:
