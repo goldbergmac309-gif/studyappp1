@@ -1,16 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   S3Client,
   PutObjectCommand,
   HeadBucketCommand,
   CreateBucketCommand,
+  GetObjectCommand,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 @Injectable()
 export class S3Service {
   private readonly client: S3Client;
   private readonly bucket: string;
+  private readonly endpoint?: string;
   private bucketReady = false;
 
   constructor(private readonly config: ConfigService) {
@@ -27,10 +30,11 @@ export class S3Service {
     const endpoint = appCfg?.s3?.endpoint;
     const forcePathStyle = appCfg?.s3?.forcePathStyle ?? false;
     this.bucket = appCfg?.s3?.bucket as string;
+    this.endpoint = endpoint || undefined;
 
     this.client = new S3Client({
       region,
-      endpoint: endpoint || undefined,
+      endpoint: this.endpoint,
       forcePathStyle,
     });
   }
@@ -41,7 +45,7 @@ export class S3Service {
     contentType: string,
   ): Promise<void> {
     if (!this.bucket) {
-      throw new Error('S3 bucket is not configured (AWS_S3_BUCKET)');
+      throw new ServiceUnavailableException('S3 bucket is not configured');
     }
     // Ensure bucket exists (useful for local MinIO in tests/dev)
     if (!this.bucketReady) {
@@ -58,12 +62,23 @@ export class S3Service {
   }
 
   private async ensureBucket(): Promise<void> {
+    // Production path: no endpoint configured -> do not attempt creation here
+    if (!this.endpoint) {
+      try {
+        const head = new HeadBucketCommand({ Bucket: this.bucket });
+        await this.client.send(head);
+        return;
+      } catch {
+        throw new ServiceUnavailableException('S3 bucket not available');
+      }
+    }
+
+    // Development path: try to create on missing
     try {
       const head = new HeadBucketCommand({ Bucket: this.bucket });
       await this.client.send(head);
       return;
     } catch {
-      // attempt to create
       const create = new CreateBucketCommand({ Bucket: this.bucket });
       await this.client.send(create);
     }
@@ -83,5 +98,25 @@ export class S3Service {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Generate a short-lived presigned URL for streaming/downloading a document.
+   */
+  async getSignedUrl(key: string, expiresInSeconds = 300): Promise<string> {
+    if (!this.bucket) {
+      throw new ServiceUnavailableException('S3 bucket is not configured');
+    }
+    // Ensure bucket exists (especially for local dev using MinIO)
+    if (!this.bucketReady) {
+      await this.ensureBucket();
+      this.bucketReady = true;
+    }
+    const cmd = new GetObjectCommand({ Bucket: this.bucket, Key: key });
+    // Cast to any to avoid type mismatches between @aws-sdk subpackages in monorepo
+    const url = (await getSignedUrl(this.client as any, cmd as any, {
+      expiresIn: expiresInSeconds,
+    })) as string;
+    return url;
   }
 }

@@ -2,6 +2,7 @@
 
 import axios, { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from "axios"
 import { useAuthStore } from "@/lib/store"
+import { useConsentStore } from "@/lib/consent-store"
 import type {
   Document as ClientDocument,
   AnalysisResult,
@@ -21,11 +22,13 @@ import type {
   NoteDto,
   SubjectSearchResponse,
   SubjectTopic,
+  GlobalSearchResponse,
 } from "@studyapp/shared-types"
 
 // Create a singleton Axios instance configured for the client app.
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
+  withCredentials: true,
 })
 
 // Attach Authorization header from the Zustand store for all requests
@@ -47,9 +50,152 @@ api.interceptors.response.use(
       // Best-effort logout; ignore errors
       try { useAuthStore.getState().actions.logout() } catch {}
     }
+    if (status === 403) {
+      const data: any = error.response?.data
+      const code = data && typeof data === 'object' ? (data as { code?: string }).code : undefined
+      if (code === 'AI_CONSENT_REQUIRED') {
+        try {
+          // Check store state first
+          const authUser = useAuthStore.getState().user
+          if (authUser?.hasConsentedToAi) {
+            return Promise.reject(error)
+          }
+          // Bridge hydration gap: consult persisted localStorage
+          let persistedConsented = false
+          try {
+            const raw = typeof window !== 'undefined' ? localStorage.getItem('studyapp-auth') : null
+            if (raw) {
+              const obj = JSON.parse(raw)
+              const st = obj?.state || obj
+              if (st?.user?.hasConsentedToAi === true) persistedConsented = true
+            }
+          } catch {}
+          if (persistedConsented) {
+            return Promise.reject(error)
+          }
+          const { isConsenting, actions } = useConsentStore.getState()
+          if (!isConsenting) actions.request()
+        } catch {}
+      }
+    }
     return Promise.reject(error)
   }
 )
+
+// SSE: Insight Session stream
+export function streamInsightSession(
+  sessionId: string,
+  handlers: {
+    onEvent?: (evt: InsightSessionDto) => void
+    onError?: (err: unknown) => void
+    onDone?: () => void
+  } = {},
+) {
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL || ''
+  const token = useAuthStore.getState().token
+  const ctrl = new AbortController()
+  const headers: Record<string, string> = { Accept: 'text/event-stream' }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const url = `${base}/insight-sessions/${encodeURIComponent(sessionId)}/stream`
+
+  ;(async () => {
+    try {
+      const res = await fetch(url, { headers, signal: ctrl.signal, credentials: 'include' as RequestCredentials })
+      if (!res.ok || !res.body) throw new Error(`SSE failed: ${res.status}`)
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        let idx
+        while ((idx = buffer.indexOf('\n\n')) !== -1) {
+          const chunk = buffer.slice(0, idx)
+          buffer = buffer.slice(idx + 2)
+          const line = chunk.split('\n').find((l) => l.startsWith('data:'))
+          if (!line) continue
+          const payload = line.slice(5).trim()
+          try {
+            const data = JSON.parse(payload) as InsightSessionDto
+            handlers.onEvent?.(data)
+            if (data.status === 'READY' || data.status === 'FAILED') {
+              ctrl.abort()
+              handlers.onDone?.()
+              return
+            }
+          } catch {
+            // ignore parse errors
+          }
+        }
+      }
+      handlers.onDone?.()
+    } catch (err) {
+      if ((err as any)?.name === 'AbortError') return
+      handlers.onError?.(err)
+    }
+  })()
+
+  return () => ctrl.abort()
+}
+
+// Insight Sessions (Phase C)
+export type InsightSessionStatus = 'PENDING' | 'READY' | 'FAILED'
+export interface InsightSessionDto {
+  id: string
+  subjectId: string
+  status: InsightSessionStatus
+  documentIds?: string[]
+  result?: Record<string, unknown>
+  createdAt?: string
+  updatedAt?: string
+}
+
+export async function createInsightSession(
+  subjectId: string,
+  documentIds: string[],
+  options: { signal?: AbortSignal } = {},
+): Promise<InsightSessionDto> {
+  try {
+    const res = await api.post<InsightSessionDto>(
+      `/subjects/${encodeURIComponent(subjectId)}/insight-sessions`,
+      { documentIds },
+      { signal: options.signal },
+    )
+    return res.data
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === 'ERR_CANCELED') throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+export async function getInsightSession(
+  sessionId: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<InsightSessionDto> {
+  try {
+    const res = await api.get<InsightSessionDto>(
+      `/insight-sessions/${encodeURIComponent(sessionId)}`,
+      { signal: options.signal },
+    )
+    return res.data
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === 'ERR_CANCELED') throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+// Consent API
+export async function consentToAi(): Promise<{ id: string; email: string; hasConsentedToAi: boolean }> {
+  const res = await api.post<{ id: string; email: string; hasConsentedToAi: boolean }>(`/users/@me/consent-ai`)
+  return res.data
+}
 
 // Exams (Prophetic Exam Generator)
 export type ExamStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED'
@@ -518,6 +664,25 @@ export async function getDocumentAnalysis(
 
 export default api
 
+// Global Aggregated Search API
+export async function performGlobalSearch(query: string): Promise<GlobalSearchResponse> {
+  try {
+    const res = await api.get<GlobalSearchResponse>(`/search`, { params: { q: query } })
+    const data = res.data
+    const notes = Array.isArray(data?.notes) ? data.notes : []
+    const documents = Array.isArray(data?.documents) ? data.documents : []
+    return {
+      notes: notes.map((n) => ({ ...n, updatedAt: new Date(n.updatedAt).toISOString() })),
+      documents: documents.map((d) => ({ ...d, createdAt: new Date(d.createdAt).toISOString() })),
+    }
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
 // Subjects API (Epoch II)
 
 export async function listSubjects(
@@ -615,16 +780,20 @@ export async function setSubjectStarred(subjectId: string, starred: boolean): Pr
 export async function reprocessDocument(
   subjectId: string,
   documentId: string,
-): Promise<{ id: string; status: 'QUEUED' }>
-{
+  options: { forceOcr?: boolean } = {},
+): Promise<{ id: string; status: 'QUEUED' }> {
   try {
+    const params: Record<string, string> = {}
+    if (options.forceOcr) params.forceOcr = '1'
     const res = await api.post<{ id: string; status: 'QUEUED' }>(
       `/subjects/${encodeURIComponent(subjectId)}/documents/${encodeURIComponent(documentId)}/reprocess`,
+      undefined,
+      { params }
     )
     return res.data
   } catch (err) {
     if (axios.isAxiosError(err)) {
-      if ((err as AxiosError).code === "ERR_CANCELED") throw err
+      if ((err as AxiosError).code === 'ERR_CANCELED') throw err
       throw new Error(extractErrorMessage(err))
     }
     throw err

@@ -78,6 +78,17 @@ RABBITMQ_URL=amqp://localhost:5672
 
 # Internal API key for oracle callback
 INTERNAL_API_KEY=dev-internal-key
+
+# Upload constraints (bytes; default 20MB)
+UPLOAD_MAX_FILE_SIZE_BYTES=20971520
+
+# ClamAV (Malware Scanning)
+# Enable to require live scanning via clamd. In tests, scanning is disabled by default.
+CLAMAV_ENABLED=true
+CLAMAV_HOST=localhost
+CLAMAV_PORT=3310
+CLAMAV_CONNECT_TIMEOUT_MS=3000
+CLAMAV_READ_TIMEOUT_MS=10000
 ```
 
 ## Health Endpoints
@@ -92,6 +103,7 @@ Readiness checks include:
 - Database (Prisma/SQL)
 - RabbitMQ queue availability (optional if not configured)
 - S3 bucket accessibility (optional if not configured)
+- ClamAV daemon connectivity (optional if disabled)
 
 Example responses:
 
@@ -107,6 +119,85 @@ Example responses:
 ```
 
 When degraded, the endpoint responds with HTTP 503 and a body describing failing indicators.
+
+## Malware Scanning (ClamAV)
+
+Core-Service performs server-side malware scanning on uploads before S3 persistence or job enqueue. It uses the `clamd` daemon via the `clamscan` Node client.
+
+- Runtime config lives in `src/config/configuration.ts` (`app.clamav` group)
+- Upload path integrates scanner in `src/documents/documents.service.ts`
+- Readiness includes ClamAV via `GET /health/ready` when enabled
+
+Local stack (docker-compose) includes a `clamav` service exposing port `3310`.
+
+Quick verification with EICAR (safe test string):
+
+```bash
+# 1) Start dependencies via docker-compose (clamav, postgres, rabbitmq, minio)
+# 2) Run core-service locally with CLAMAV_ENABLED=true
+
+EICAR='X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
+printf %s "$EICAR" > /tmp/eicar.txt
+
+# Signup -> get token
+TOKEN=$(curl -s -X POST http://localhost:3000/auth/signup \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"eicar@test.com","password":"password123"}' | jq -r .accessToken)
+
+# Create subject
+SUBJECT=$(curl -s -X POST http://localhost:3000/subjects \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Security"}' | jq -r .id)
+
+# Attempt upload of EICAR -> expect HTTP 400
+curl -i -X POST http://localhost:3000/subjects/$SUBJECT/documents \
+  -H "Authorization: Bearer $TOKEN" \
+  -F file=@/tmp/eicar.txt
+```
+
+## Upload Allowlist & Security
+
+Uploads are constrained to a conservative MIME/extension allowlist to reduce risk and improve processing reliability. Unsupported types return HTTP 415 without creating a `Document` or touching S3/Queue.
+
+Allowed:
+
+- PDF (`application/pdf`, `.pdf`)
+- Plain text (`text/plain`, `.txt`)
+- Markdown (`text/markdown`, `.md`)
+- Word documents (`.docx`, `.doc`)
+
+All accepted uploads are scanned for malware prior to S3 persistence and job enqueue. The scanner follows a fail-closed policy.
+
+## Insight Sessions: Server-Sent Events (SSE)
+
+Core-service exposes an SSE endpoint that streams real-time status of an Insight Session until completion.
+
+- Create session: `POST /subjects/:subjectId/insight-sessions`
+- Get session: `GET /insight-sessions/:sessionId`
+- Stream updates: `GET /insight-sessions/:sessionId/stream`
+
+The SSE endpoint requires JWT and emits `text/event-stream` messages carrying the session JSON (status: `PENDING|READY|FAILED`). Clients should close the stream when a terminal status is observed.
+
+Client convenience helper is available in `apps/client/src/lib/api.ts` as `streamInsightSession(sessionId, handlers)`.
+
+## Documents: Presigned URL (Preview/Download)
+
+A thin endpoint returns a short-lived presigned URL for document download/preview. Ownership is enforced via JWT.
+
+```
+GET /documents/:id/url   # { url: string }
+```
+
+The URL is generated on-demand from the configured S3 bucket and expires shortly (default 5 minutes). Intended for future viewer integrations.
+
+## Provider Toggles & Consent (See oracle-service)
+
+Embedding/LLM provider selection and consent gating are controlled in oracle-service. Refer to `apps/oracle-service/README.md` for:
+
+- `ENGINE_PROVIDER`, `ENGINE_MODEL_NAME`, `ENGINE_DIM` (1536 default)
+- Consent gating via `AI_CONSENT=true` and `OPENAI_API_KEY`
+- `ENABLE_META_CALLBACK` to post structural metadata (language, headings, detected type)
 
 ## Deployment
 

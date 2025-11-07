@@ -2,11 +2,15 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
+  UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../s3/s3.service';
 import { QueueService } from '../queue/queue.service';
 import cuid from 'cuid';
+import { MalwareScannerService } from './malware-scanner.service';
+// Note: avoid importing Prisma enum types directly to keep build stable across client versions
 
 @Injectable()
 export class DocumentsService {
@@ -14,9 +18,15 @@ export class DocumentsService {
     private readonly prisma: PrismaService,
     private readonly s3: S3Service,
     private readonly queue: QueueService,
+    private readonly scanner: MalwareScannerService,
   ) {}
 
-  async upload(userId: string, subjectId: string, file: Express.Multer.File) {
+  async upload(
+    userId: string,
+    subjectId: string,
+    file: Express.Multer.File,
+    resourceType?: string,
+  ) {
     // Ensure subject belongs to user
     const subject = await this.prisma.subject.findFirst({
       where: { id: subjectId, userId },
@@ -26,12 +36,45 @@ export class DocumentsService {
       throw new NotFoundException('Subject not found');
     }
 
+    // MIME/extension allowlist
+    const original = (file?.originalname || '').toString();
+    const ext = original.includes('.')
+      ? original.substring(original.lastIndexOf('.') + 1).toLowerCase()
+      : '';
+    const mime = (file?.mimetype || '').toLowerCase();
+    const allowedExts = new Set(['pdf', 'txt', 'md', 'docx', 'doc']);
+    const allowedMimes = new Set([
+      'application/pdf',
+      'text/plain',
+      'text/markdown',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
+    ]);
+    const isAllowed = (ext && allowedExts.has(ext)) || (mime && allowedMimes.has(mime));
+    if (!isAllowed) {
+      throw new UnsupportedMediaTypeException(
+        'Unsupported file type. Allowed: PDF, TXT, MD, DOCX, DOC.',
+      );
+    }
+
     const documentId = cuid();
     const safeName = encodeURIComponent(file.originalname || 'upload');
     const s3Key = `documents/${userId}/${documentId}/${safeName}`;
 
     let created = false;
     try {
+      const rtRaw = (resourceType ?? '').toString().trim().toUpperCase();
+      const allowed: readonly string[] = [
+        'EXAM',
+        'SYLLABUS',
+        'LECTURE_NOTES',
+        'TEXTBOOK',
+        'PRACTICE_SET',
+        'NOTES',
+        'OTHER',
+      ];
+      const rtValid: string | undefined = allowed.includes(rtRaw) ? rtRaw : undefined;
+
       const doc = await this.prisma.document.create({
         data: {
           id: documentId,
@@ -39,9 +82,21 @@ export class DocumentsService {
           s3Key,
           subjectId,
           status: 'UPLOADED',
+          ...(rtValid ? { resourceType: rtValid as unknown as any } : {}),
+          ...(rtRaw ? { meta: ({ resourceTypeHint: rtRaw } as unknown as any) } : {}),
         },
       });
       created = true;
+      // Malware scan BEFORE S3 upload/queue
+      const scan = await this.scanner.scan(
+        file.buffer,
+        file.originalname || 'upload',
+      );
+      if (!scan.clean) {
+        throw new BadRequestException(
+          `Malware scan failed: ${scan.reason || 'unknown'}`,
+        );
+      }
 
       await this.s3.putObject(
         s3Key,
@@ -93,6 +148,8 @@ export class DocumentsService {
       filename: d.filename,
       status: d.status,
       createdAt: d.createdAt.toISOString(),
+      resourceType: (d as any).resourceType,
+      meta: (d as any).meta ?? undefined,
     }));
   }
 
@@ -114,6 +171,18 @@ export class DocumentsService {
       engineVersion: doc.analysisResult.engineVersion,
       resultPayload: doc.analysisResult.resultPayload as unknown,
     };
+  }
+
+  async getSignedUrl(userId: string, documentId: string) {
+    const doc = await this.prisma.document.findFirst({
+      where: { id: documentId, subject: { userId } },
+      select: { id: true, s3Key: true },
+    });
+    if (!doc) {
+      throw new NotFoundException('Document not found');
+    }
+    const url = await this.s3.getSignedUrl(doc.s3Key);
+    return { url } as const;
   }
 
   async listSubjectInsights(userId: string, subjectId: string) {
@@ -147,7 +216,7 @@ export class DocumentsService {
     return out;
   }
 
-  async reprocess(userId: string, subjectId: string, documentId: string) {
+  async reprocess(userId: string, subjectId: string, documentId: string, forceOcr = false) {
     // Ensure subject belongs to user
     const subject = await this.prisma.subject.findFirst({
       where: { id: subjectId, userId },
@@ -178,6 +247,7 @@ export class DocumentsService {
       documentId: doc.id,
       s3Key: doc.s3Key,
       userId,
+      forceOcr,
     });
     await this.prisma.document.update({
       where: { id: doc.id },

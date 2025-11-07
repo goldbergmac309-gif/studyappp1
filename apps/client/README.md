@@ -56,6 +56,21 @@ The client runs on http://localhost:3100 by default (see `package.json`), and th
 - UI components use shadcn/ui primitives for visual consistency.
 - The protected layout lives at `app/(dashboard)/layout.tsx` and redirects to `/login` when no token is present.
 
+## Insight Sessions (SSE)
+
+The client subscribes to real-time Insight Session updates using Server-Sent Events (SSE) to avoid polling.
+
+- Helper: `src/lib/api.ts` — `streamInsightSession(sessionId, { onEvent, onError, onDone })`
+- Integration: `app/(dashboard)/subjects/[subjectId]/_components/insights-tab.tsx`
+  - Automatically aborts the stream when the session reaches `READY` or `FAILED`.
+  - Falls back to periodic polling if the SSE connection fails.
+
+## Upload Allowlist & Security
+
+Uploads are limited to: PDF, TXT, MD, DOCX, DOC. Unsupported files are rejected with HTTP 415 before a `Document` is created.
+
+All accepted uploads are scanned for malware prior to storage, and the UI surfaces common error cases via toasts.
+
 ## Useful Scripts
 
 ```bash

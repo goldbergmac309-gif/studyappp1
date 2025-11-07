@@ -8,9 +8,10 @@ import {
   Param,
   Req,
   HttpCode,
+  Body,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import multer from 'multer';
 import { DocumentsService } from './documents.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Request } from 'express';
@@ -23,19 +24,15 @@ export class DocumentsController {
 
   @UseGuards(JwtAuthGuard)
   @Post()
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: multer.memoryStorage(),
-      limits: { fileSize: 20 * 1024 * 1024 },
-    }),
-  )
+  @UseInterceptors(FileInterceptor('file'))
   async upload(
     @Req() req: RequestWithUser,
     @Param('subjectId') subjectId: string,
     @UploadedFile() file: Express.Multer.File,
+    @Body('resourceType') resourceType?: string,
   ) {
     const userId = req.user.id;
-    const result = await this.documentsService.upload(userId, subjectId, file);
+    const result = await this.documentsService.upload(userId, subjectId, file, resourceType);
     return result;
   }
 
@@ -56,9 +53,11 @@ export class DocumentsController {
     @Req() req: RequestWithUser,
     @Param('subjectId') subjectId: string,
     @Param('id') documentId: string,
+    @Query('forceOcr') forceOcr?: string,
   ) {
     const userId = req.user.id;
-    return this.documentsService.reprocess(userId, subjectId, documentId);
+    const force = typeof forceOcr === 'string' && ['1', 'true', 'yes'].includes(forceOcr.toLowerCase());
+    return this.documentsService.reprocess(userId, subjectId, documentId, force);
   }
 }
 
@@ -74,6 +73,15 @@ export class DocumentsQueryController {
   ) {
     const userId = req.user.id;
     return this.documentsService.getAnalysis(userId, documentId);
+  }
+
+  @Get(':id/url')
+  async getPresignedUrl(
+    @Req() req: RequestWithUser,
+    @Param('id') documentId: string,
+  ) {
+    const userId = req.user.id;
+    return this.documentsService.getSignedUrl(userId, documentId);
   }
 }
 
