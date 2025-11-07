@@ -1,12 +1,18 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import {
+  INestApplication,
+  ValidationPipe,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { S3Service } from '../src/s3/s3.service';
 import { QueueService } from '../src/queue/queue.service';
 import cuid from 'cuid';
+import { MalwareScannerService } from '../src/documents/malware-scanner.service';
+import { GlobalExceptionFilter } from '../src/common/filters/http-exception.filter';
 // Local enum mirror for Prisma Status (string union)
 const Status = {
   UPLOADED: 'UPLOADED',
@@ -39,6 +45,7 @@ describe('Documents (e2e)', () => {
   beforeEach(async () => {
     s3Mock = { putObject: jest.fn().mockResolvedValue(undefined) };
     queueMock = { publishDocumentJob: jest.fn(() => undefined) };
+    const scannerStub = { scan: jest.fn().mockResolvedValue({ clean: true }) };
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -47,6 +54,8 @@ describe('Documents (e2e)', () => {
       .useValue(s3Mock)
       .overrideProvider(QueueService)
       .useValue(queueMock)
+      .overrideProvider(MalwareScannerService)
+      .useValue(scannerStub)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -65,6 +74,138 @@ describe('Documents (e2e)', () => {
       }),
     );
     await app.init();
+  });
+
+  it('unsupported media type: returns 415 and does not create a Document or call S3/Queue', async () => {
+    const token = await signup('doc_unsupported@test.com');
+    const subjectId = await createSubject(token, 'Media Types');
+
+    // Try to upload a JPEG (not allowed by the allowlist)
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xdb]);
+    const res = await request(app.getHttpServer())
+      .post(`/subjects/${subjectId}/documents`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', jpeg, 'image.jpg');
+
+    expect(res.status).toBe(415);
+
+    // Ensure no document was created for this subject
+    const count = await prisma.document.count({ where: { subjectId } });
+    expect(count).toBe(0);
+    expect(s3Mock.putObject).not.toHaveBeenCalled();
+    expect(queueMock.publishDocumentJob).not.toHaveBeenCalled();
+  });
+
+  it('rejects files larger than configured maxFileSize with 413', async () => {
+    const prev = process.env.UPLOAD_MAX_FILE_SIZE_BYTES;
+    process.env.UPLOAD_MAX_FILE_SIZE_BYTES = '1024'; // 1KB limit for this test
+
+    // Build a fresh app to pick up the env-backed config
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(S3Service)
+      .useValue(s3Mock)
+      .overrideProvider(QueueService)
+      .useValue(queueMock)
+      .overrideProvider(MalwareScannerService)
+      .useValue({ scan: jest.fn().mockResolvedValue({ clean: true }) })
+      .compile();
+
+    const app2 = moduleFixture.createNestApplication();
+    app2.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
+    app2.useGlobalFilters(new GlobalExceptionFilter());
+    await app2.init();
+
+    try {
+      const token = await (async () => {
+        const res = await request(app2.getHttpServer())
+          .post('/auth/signup')
+          .send({ email: 'oversize@test.com', password: 'password123' })
+          .expect(201);
+        return (res.body as LoginResponse).accessToken;
+      })();
+
+      const subjectId = await (async () => {
+        const res = await request(app2.getHttpServer())
+          .post('/subjects')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ name: 'Oversized' })
+          .expect(201);
+        return (res.body as SubjectResponse).id;
+      })();
+
+      const big = Buffer.alloc(2 * 1024, 1); // 2KB > 1KB
+      const res = await request(app2.getHttpServer())
+        .post(`/subjects/${subjectId}/documents`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', big, 'large.bin');
+      expect(res.status).toBe(413);
+      expect(res.body).toMatchObject({
+        statusCode: 413,
+        message: expect.any(String),
+        timestamp: expect.any(String),
+      });
+    } finally {
+      if (prev === undefined) delete process.env.UPLOAD_MAX_FILE_SIZE_BYTES;
+      else process.env.UPLOAD_MAX_FILE_SIZE_BYTES = prev;
+    }
+  });
+
+  it('infected file: returns 400, document marked FAILED, and S3/Queue not called', async () => {
+    const token = await signup('doc_mal_fail@test.com');
+    const subjectId = await createSubject(token, 'Security');
+
+    // Spy on scanner to simulate infected
+    const scanner = app.get(MalwareScannerService);
+    jest
+      .spyOn(scanner, 'scan')
+      .mockResolvedValueOnce({ clean: false, reason: 'EICAR-Test-File' });
+
+    await request(app.getHttpServer())
+      .post(`/subjects/${subjectId}/documents`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', makeFileBuffer('DATA'), 'notes.pdf')
+      .expect(400);
+
+    const doc = await prisma.document.findFirst({
+      where: { subjectId },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(doc).toBeTruthy();
+    expect(doc?.status).toBe(Status.FAILED);
+    expect(s3Mock.putObject).not.toHaveBeenCalled();
+    expect(queueMock.publishDocumentJob).not.toHaveBeenCalled();
+  });
+
+  it('scanner down: returns 503, document marked FAILED, and S3/Queue not called', async () => {
+    const token = await signup('doc_scanner_down@test.com');
+    const subjectId = await createSubject(token, 'Infosec');
+
+    // Spy on scanner to simulate service outage
+    const scanner = app.get(MalwareScannerService);
+    jest
+      .spyOn(scanner, 'scan')
+      .mockRejectedValueOnce(
+        new ServiceUnavailableException('Malware scanner is unavailable'),
+      );
+
+    await request(app.getHttpServer())
+      .post(`/subjects/${subjectId}/documents`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', makeFileBuffer('DATA'), 'notes.pdf')
+      .expect(503);
+
+    const doc = await prisma.document.findFirst({
+      where: { subjectId },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(doc).toBeTruthy();
+    expect(doc?.status).toBe(Status.FAILED);
+    expect(s3Mock.putObject).not.toHaveBeenCalled();
+    expect(queueMock.publishDocumentJob).not.toHaveBeenCalled();
   });
 
   describe('Reprocess endpoint', () => {
@@ -123,6 +264,35 @@ describe('Documents (e2e)', () => {
         where: { id: docId },
       });
       expect(updated?.status).toBe(Status.QUEUED);
+    });
+
+    it('reprocess with forceOcr=1 forwards flag to queue', async () => {
+      const email = 'reproc_force@test.com';
+      const token = await signup(email);
+      const subjectId = await createSubject(token, 'Signals');
+
+      const me = await prisma.user.findFirst({ where: { email } });
+      expect(me).toBeTruthy();
+
+      const docId = cuid();
+      await prisma.document.create({
+        data: {
+          id: docId,
+          filename: 'img.pdf',
+          s3Key: `documents/${me!.id}/${docId}/img.pdf`,
+          status: Status.FAILED,
+          subjectId,
+        },
+      });
+
+      await request(app.getHttpServer())
+        .post(`/subjects/${subjectId}/documents/${docId}/reprocess?forceOcr=1`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(queueMock.publishDocumentJob).toHaveBeenCalledWith(
+        expect.objectContaining({ documentId: docId, forceOcr: true }),
+      );
     });
 
     it('returns 409 when document is not in a reprocessable state', async () => {
@@ -423,6 +593,39 @@ describe('Documents (e2e)', () => {
       .get(`/subjects/${subjectB}/documents`)
       .set('Authorization', `Bearer ${tokenA}`)
       .expect(404);
+  });
+
+  it('GET /subjects/:id/documents includes resourceType and meta when present', async () => {
+    const email = 'docs_rt_meta@test.com';
+    const token = await signup(email);
+    const subjectId = await createSubject(token, 'Vision');
+
+    const me = await prisma.user.findFirst({ where: { email } });
+    expect(me).toBeTruthy();
+
+    await prisma.document.create({
+      data: {
+        id: cuid(),
+        filename: 'vision.pdf',
+        s3Key: `documents/${me!.id}/vision`,
+        status: Status.COMPLETED,
+        subjectId,
+        resourceType: 'TEXTBOOK' as any,
+        meta: { source: 'scanner', resourceTypeHint: 'TEXTBOOK' } as any,
+      },
+    });
+
+    const res = await request(app.getHttpServer())
+      .get(`/subjects/${subjectId}/documents`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    const arr = res.body as Array<Record<string, unknown>>;
+    expect(Array.isArray(arr)).toBe(true);
+    expect(arr.length).toBeGreaterThanOrEqual(1);
+    // Ensure shape contains resourceType/meta keys
+    expect(arr[0]).toHaveProperty('resourceType');
+    expect(arr[0]).toHaveProperty('meta');
   });
 
   it('GET /documents/:id/analysis returns 200 for completed analysis and 404 otherwise', async () => {
