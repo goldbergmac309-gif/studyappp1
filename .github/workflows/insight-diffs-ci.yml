@@ -12,6 +12,10 @@ on:
   push:
     branches: [ main, master ]
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   oracle-unit:
     runs-on: ubuntu-latest
@@ -64,22 +68,50 @@ jobs:
           docker system prune -af --volumes || true
           df -h
 
-      - name: Pull oracle-worker image
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Optional GHCR PAT login
+        if: ${{ secrets.GHCR_TOKEN != '' }}
         run: |
-          docker pull ghcr.io/${{ github.repository_owner }}/oracle-worker:latest || true
+          echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Try pull oracle-worker image (optional)
+        run: |
+          set -e
+          if docker pull ghcr.io/${{ github.repository_owner }}/oracle-worker:latest; then
+            echo "GHCR_OW_OK=1" >> $GITHUB_ENV
+            PRJ=$(basename "$GITHUB_WORKSPACE")
+            docker tag ghcr.io/${{ github.repository_owner }}/oracle-worker:latest "$PRJ-oracle-worker:latest"
+          else
+            echo "GHCR_OW_OK=0" >> $GITHUB_ENV
+          fi
 
       - name: Create CI oracle-worker override
         run: |
-          cat > /tmp/ci.worker.image.override.yml << 'YAML'
-          services:
-            oracle-worker:
-              build: null
-              image: ghcr.io/${{ github.repository_owner }}/oracle-worker:latest
-          YAML
+          if [ "${GHCR_OW_OK}" = "1" ]; then
+            cat > /tmp/ci.worker.image.override.yml << 'YAML'
+            services:
+              oracle-worker:
+                build: null
+                image: ${COMPOSE_PROJECT_NAME:-studyappp1}-oracle-worker:latest
+            YAML
+          else
+            echo "services: {}" > /tmp/ci.worker.image.override.yml
+          fi
 
-      - name: Build core-service only
+      - name: Build needed images
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.local.override.yml build core-service
+          if [ "${GHCR_OW_OK}" = "1" ]; then
+            docker compose -f docker-compose.yml -f docker-compose.local.override.yml build core-service oracle-embed
+          else
+            docker compose -f docker-compose.yml -f docker-compose.local.override.yml build core-service oracle-embed oracle-worker
+          fi
+          echo "Built images:" && docker images --format '{{.Repository}}:{{.Tag}} {{.Size}}' | egrep 'oracle|core-service|studyappp1'
 
       - name: Start stack
         run: |
