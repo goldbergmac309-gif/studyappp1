@@ -61,6 +61,21 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.local.override.yml up -d
         # Assumes docker-compose.local.override.yml exposes core-service on 3001
 
+      - name: Wait for core-service health
+        run: |
+          set -e
+          for i in {1..60}; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/health/ready || true)
+            echo "health/ready -> $code"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "core-service not ready within timeout" >&2
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml logs core-service || true
+          exit 1
+
       - name: Run diffs E2E (STRICT)
         env:
           DIFF_MASTERY_DELTA_THRESHOLD: "0.01"
@@ -73,4 +88,9 @@ jobs:
       - name: Dump oracle-worker logs on failure
         if: failure()
         run: |
-          docker compose logs oracle-worker || true
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml logs oracle-worker || true
+
+      - name: Teardown (always)
+        if: always()
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml down -v || true
