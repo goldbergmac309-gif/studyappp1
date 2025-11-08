@@ -28,11 +28,10 @@ Notes:
 """
 
 from dataclasses import dataclass
-import hashlib
-import math
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
-from utils.pdf import extract_text
+from utils.pdf import extract_text_smart
+from .providers import EmbeddingProvider, StubProvider
 
 
 @dataclass
@@ -43,8 +42,10 @@ class EngineConfig:
 
 
 class ConceptualEngine:
-    def __init__(self, model_name: str = "stub-miniLM", dim: int = 384):
+    def __init__(self, model_name: str = "stub-miniLM", dim: int = 384, provider: Optional[EmbeddingProvider] = None):
         self.cfg = EngineConfig(model_name=model_name, dim=dim)
+        # If a provider is not supplied, default to StubProvider with requested dim
+        self._provider: EmbeddingProvider = provider or StubProvider(model_name=model_name, dim=dim)
 
     @property
     def model_name(self) -> str:
@@ -57,28 +58,6 @@ class ConceptualEngine:
     def _token_count(self, text: str) -> int:
         # naive token count for diagnostics
         return max(0, len(text.split()))
-
-    def _deterministic_vec(self, text: str) -> List[float]:
-        # Create a deterministic pseudo-embedding using SHA-256 expansions
-        dim = self.cfg.dim
-        out: List[float] = []
-        seed = text.encode("utf-8", errors="ignore")
-        counter = 0
-        while len(out) < dim:
-            h = hashlib.sha256(seed + counter.to_bytes(4, "big")).digest()
-            # turn bytes into floats in [-1, 1]
-            for i in range(0, len(h), 4):
-                if len(out) >= dim:
-                    break
-                chunk = h[i : i + 4]
-                val = int.from_bytes(chunk, "big", signed=False)
-                # map to [-1, 1]
-                out.append((val % 2000000) / 1000000.0 - 1.0)
-            counter += 1
-        # L2 normalize
-        norm = math.sqrt(sum(v * v for v in out)) or 1.0
-        out = [v / norm for v in out]
-        return out
 
     def _split_text(self, text: str) -> List[str]:
         # Simple chunker by period and max length
@@ -100,18 +79,27 @@ class ConceptualEngine:
         return chunks
 
     def chunk_and_embed(self, pdf_bytes: bytes, doc_id: str) -> Dict[str, Any]:
-        text, _pages = extract_text(pdf_bytes)
+        text, _pages, _ocr_used = extract_text_smart(pdf_bytes)
         if not text:
-            return {"model": self.model_name, "dim": self.dim, "chunks": []}
+            return {"model": self._provider.get_model_name(), "dim": self._provider.get_dim(), "chunks": []}
         texts = self._split_text(text)
+        embeddings = self._provider.embed_texts(texts)
+        # Safety: align embeddings length with texts length
+        if len(embeddings) != len(texts):
+            # Pad or truncate to match texts
+            if len(embeddings) < len(texts):
+                last = embeddings[-1] if embeddings else [0.0] * self._provider.get_dim()
+                embeddings = embeddings + [last for _ in range(len(texts) - len(embeddings))]
+            else:
+                embeddings = embeddings[: len(texts)]
         chunks = []
-        for i, t in enumerate(texts):
+        for i, (t, e) in enumerate(zip(texts, embeddings)):
             chunks.append(
                 {
                     "index": i,
                     "text": t,
-                    "embedding": self._deterministic_vec(t),
+                    "embedding": e,
                     "tokens": self._token_count(t),
                 }
             )
-        return {"model": self.model_name, "dim": self.dim, "chunks": chunks}
+        return {"model": self._provider.get_model_name(), "dim": self._provider.get_dim(), "chunks": chunks}

@@ -6,6 +6,7 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import type { Prisma, ResourceType } from '@prisma/client';
 import { S3Service } from '../s3/s3.service';
 import { QueueService } from '../queue/queue.service';
 import cuid from 'cuid';
@@ -50,7 +51,8 @@ export class DocumentsService {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/msword',
     ]);
-    const isAllowed = (ext && allowedExts.has(ext)) || (mime && allowedMimes.has(mime));
+    const isAllowed =
+      (ext && allowedExts.has(ext)) || (mime && allowedMimes.has(mime));
     if (!isAllowed) {
       throw new UnsupportedMediaTypeException(
         'Unsupported file type. Allowed: PDF, TXT, MD, DOCX, DOC.',
@@ -73,7 +75,9 @@ export class DocumentsService {
         'NOTES',
         'OTHER',
       ];
-      const rtValid: string | undefined = allowed.includes(rtRaw) ? rtRaw : undefined;
+      const rtValid: string | undefined = allowed.includes(rtRaw)
+        ? rtRaw
+        : undefined;
 
       const doc = await this.prisma.document.create({
         data: {
@@ -82,16 +86,17 @@ export class DocumentsService {
           s3Key,
           subjectId,
           status: 'UPLOADED',
-          ...(rtValid ? { resourceType: rtValid as unknown as any } : {}),
-          ...(rtRaw ? { meta: ({ resourceTypeHint: rtRaw } as unknown as any) } : {}),
+          ...(rtValid
+            ? { resourceType: rtValid as unknown as ResourceType }
+            : {}),
+          ...(rtRaw
+            ? { meta: { resourceTypeHint: rtRaw } as Prisma.InputJsonValue }
+            : {}),
         },
       });
       created = true;
       // Malware scan BEFORE S3 upload/queue
-      const scan = await this.scanner.scan(
-        file.buffer,
-        file.originalname || 'upload',
-      );
+      const scan = await this.scanner.scan(file.buffer);
       if (!scan.clean) {
         throw new BadRequestException(
           `Malware scan failed: ${scan.reason || 'unknown'}`,
@@ -124,7 +129,7 @@ export class DocumentsService {
           /* ignore cleanup errors */
         }
       }
-      throw err;
+      throw err instanceof Error ? err : new Error(String(err));
     }
   }
 
@@ -148,8 +153,8 @@ export class DocumentsService {
       filename: d.filename,
       status: d.status,
       createdAt: d.createdAt.toISOString(),
-      resourceType: (d as any).resourceType,
-      meta: (d as any).meta ?? undefined,
+      resourceType: String(d.resourceType),
+      meta: d.meta ?? undefined,
     }));
   }
 
@@ -216,7 +221,12 @@ export class DocumentsService {
     return out;
   }
 
-  async reprocess(userId: string, subjectId: string, documentId: string, forceOcr = false) {
+  async reprocess(
+    userId: string,
+    subjectId: string,
+    documentId: string,
+    forceOcr = false,
+  ) {
     // Ensure subject belongs to user
     const subject = await this.prisma.subject.findFirst({
       where: { id: subjectId, userId },

@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
 import math
+import re
 from sklearn.cluster import KMeans
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer, ENGLISH_STOP_WORDS
 
 
 @dataclass
@@ -36,9 +37,49 @@ def compute_subject_topics(records: List[Dict[str, Any]]) -> List[Dict[str, Any]
     texts = [r.get("text", "") for r in records]
     doc_ids = [str(r.get("documentId", "")) for r in records]
 
-    # TF-IDF on chunk texts for term scoring and cluster labeling
-    vectorizer = TfidfVectorizer(max_features=5000, stop_words="english")
-    tfidf = vectorizer.fit_transform(texts)
+    # Preprocess: strip URLs/emails, collapse whitespace, and ignore tokens with digits
+    url_re = re.compile(r"https?://\S+|www\.[^\s]+", re.IGNORECASE)
+    email_re = re.compile(r"\b[^\s@]+@[^\s@]+\b")
+    def _clean_text(t: str) -> str:
+        t = t or ""
+        t = url_re.sub(" ", t)
+        t = email_re.sub(" ", t)
+        # Remove page/figure/table boilerplate patterns
+        t = re.sub(r"\b(page|pages|figure|fig\.?|table)\s*\d+\b", " ", t, flags=re.IGNORECASE)
+        t = re.sub(r"\s+", " ", t)
+        return t.strip()
+
+    cleaned = [_clean_text(t) for t in texts]
+
+    # Extended stopwords to kill domain boilerplate
+    custom_sw = {
+        "https", "http", "www", "com", "org", "edu", "nl",
+        "university", "maastrichtuniversity", "course", "lecture", "lecturer",
+        "students", "management", "mediasite", "mini", "information",
+        "review", "comments"
+    }
+    stopwords = list(ENGLISH_STOP_WORDS.union(custom_sw))
+
+    # TF-IDF for cluster labeling; ignore tokens with digits and keep 1-2 grams
+    vectorizer = TfidfVectorizer(
+        max_features=5000,
+        stop_words=stopwords,
+        ngram_range=(1, 2),
+        lowercase=True,
+        token_pattern=r"(?u)\b[a-z][a-z]{2,}\b",
+        min_df=1,
+        max_df=0.9,
+        sublinear_tf=True,
+        preprocessor=_clean_text,
+    )
+    try:
+        tfidf = vectorizer.fit_transform(cleaned)
+    except ValueError:
+        # e.g., empty vocabulary for very small/clean corpora -> no topics
+        return []
+    # If no features survived preprocessing, bail out gracefully
+    if getattr(tfidf, "shape", (0, 0))[1] == 0:
+        return []
     vocab = vectorizer.get_feature_names_out()
 
     n = len(records)

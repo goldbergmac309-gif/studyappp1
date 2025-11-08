@@ -1,0 +1,20 @@
+# Exclude local virtualenvs and caches from build context
+.venv
+**/.venv
+__pycache__
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# VCS
+.git
+.gitignore
+
+# Logs and large artifacts
+**/*.log
+**/*.lockb
+
+# Node (if any subfolders)
+node_modules
+**/node_modules

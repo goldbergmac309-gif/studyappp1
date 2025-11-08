@@ -1,28 +1,5 @@
-version: '3.9'
-
 services:
-  postgres:
-    ports:
-      - "5545:5432"
-
-  rabbitmq:
-    ports:
-      - "5673:5672"
-      - "15673:15672"
-
-  minio:
-    ports:
-      - "9100:9000"
-      - "9101:9001"
-
-  oracle-embed:
-    ports:
-      - "8100:8000"
-
-  # core-service will run locally (pnpm start:test) on PORT=3201
-  # map oracle-worker to host core-service
-  oracle-worker:
+  core-service:
     environment:
-      CORE_SERVICE_URL: http://host.docker.internal:3201
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672//
-      AWS_S3_ENDPOINT: http://minio:9000
+      - MALWARE_SCAN_ENABLED=false
+      - MALWARE_SCANNER_URL=

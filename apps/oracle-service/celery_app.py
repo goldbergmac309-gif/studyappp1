@@ -33,6 +33,7 @@ app.conf.update(
         "workers.analysis_worker",
         "workers.v2_reindex_worker",
         "workers.topics_worker",
+        "workers.insights_session_worker",
     ),
     # Ensure Celery tasks go to Celery's default queue; our worker will consume both
     task_default_queue="celery",
@@ -54,6 +55,7 @@ class RawQueueBridge(bootsteps.ConsumerStep):
         self.app = consumer.app
         self.queue = Queue(settings.RABBITMQ_QUEUE_NAME, durable=True)
         self.reindex_queue = Queue(settings.RABBITMQ_REINDEX_QUEUE_NAME, durable=True)
+        self.insights_queue = Queue(settings.RABBITMQ_INSIGHTS_QUEUE_NAME, durable=True)
         logger.info(
             "RawQueueBridge initialized for queue=%s broker=%s",
             settings.RABBITMQ_QUEUE_NAME,
@@ -72,6 +74,12 @@ class RawQueueBridge(bootsteps.ConsumerStep):
                 channel,
                 queues=[self.reindex_queue],
                 callbacks=[self.on_reindex_message],
+                accept=["json"],
+            ),
+            Consumer(
+                channel,
+                queues=[self.insights_queue],
+                callbacks=[self.on_insight_message],
                 accept=["json"],
             ),
         ]
@@ -143,6 +151,46 @@ class RawQueueBridge(bootsteps.ConsumerStep):
             message.ack()
         except Exception:
             logger.exception("Failed to bridge reindex message; acknowledging to avoid poison pill")
+            message.ack()
+
+    def on_insight_message(self, body: Any, message: Any) -> None:
+        try:
+            payload: dict[str, Any]
+            if isinstance(body, (bytes, bytearray)):
+                body = body.decode("utf-8", errors="replace")
+            if isinstance(body, str):
+                payload = json.loads(body)
+            elif isinstance(body, dict):
+                payload = body
+            else:
+                raise ValueError(f"Unsupported message body type: {type(body)!r}")
+
+            subject_id = payload.get("subjectId")
+            session_id = payload.get("sessionId")
+            docs = payload.get("documentIds")
+            if not isinstance(subject_id, str) or not subject_id:
+                raise ValueError("Invalid payload: missing or invalid 'subjectId'")
+            if not isinstance(session_id, str) or not session_id:
+                raise ValueError("Invalid payload: missing or invalid 'sessionId'")
+            if not isinstance(docs, list) or not docs:
+                raise ValueError("Invalid payload: missing or invalid 'documentIds'")
+
+            self.app.send_task(
+                "oracle.process_insight_session",
+                args=[payload],
+                queue="celery",
+            )
+            message.ack()
+            logger.info(
+                "Bridged job to Celery task oracle.process_insight_session (subjectId=%s sessionId=%s)",
+                subject_id,
+                session_id,
+            )
+        except json.JSONDecodeError as exc:
+            logger.error("JSON decode error for raw message (insights): %s", exc)
+            message.ack()
+        except Exception:
+            logger.exception("Failed to bridge insights message; acknowledging to avoid poison pill")
             message.ack()
 
 

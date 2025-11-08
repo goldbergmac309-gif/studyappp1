@@ -130,7 +130,9 @@ describe('Subjects (e2e)', () => {
         .query({ filter: 'recent' })
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
-      const afterNames = (after.body as Array<{ name: string }>).map((s) => s.name);
+      const afterNames = (after.body as Array<{ name: string }>).map(
+        (s) => s.name,
+      );
       expect(afterNames).toContain('VeryOld');
     });
   });

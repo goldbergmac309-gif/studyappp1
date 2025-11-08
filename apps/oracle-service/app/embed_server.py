@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import Any, Dict, List
 
 from app.core.conceptual_engine import ConceptualEngine
+from utils.redaction import redact_pii
 from config import get_settings
 
 app = FastAPI(title="Oracle Embed API")
@@ -28,6 +29,14 @@ def embed(req: EmbedRequest) -> Dict[str, Any]:
 
     settings = get_settings()
     engine = ConceptualEngine(model_name=settings.ENGINE_MODEL_NAME, dim=settings.ENGINE_DIM)
+
+    # Apply basic PII redaction before any downstream processing
+    try:
+        redacted = redact_pii([{"role": "user", "content": text}])
+        text = str(redacted[0].get("content", text))
+    except Exception:
+        # Best-effort: if redaction fails, continue with original text
+        pass
 
     # Use engine's deterministic vector generator directly on text
     try:

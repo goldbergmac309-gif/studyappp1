@@ -23,6 +23,54 @@ export type SubjectInsights = Record<
   }
 >
 
+// Canonical document contracts (Resources)
+export type DocumentStatus =
+  | 'UPLOADED'
+  | 'QUEUED'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'FAILED'
+
+export type ResourceType =
+  | 'EXAM'
+  | 'SYLLABUS'
+  | 'LECTURE_NOTES'
+  | 'TEXTBOOK'
+  | 'PRACTICE_SET'
+  | 'NOTES'
+  | 'OTHER'
+
+export interface DocumentDto {
+  id: string
+  filename: string
+  status: DocumentStatus
+  createdAt: string
+  resourceType?: ResourceType
+  meta?: any
+}
+
+// Analysis contract for a single document (used by polling and insights views)
+export interface AnalysisResult {
+  id: string
+  engineVersion: string
+  resultPayload: {
+    keywords: AnalysisKeyword[]
+    metrics: AnalysisMetrics
+  }
+}
+
+// Exams (Prophetic Exam Generator)
+export type ExamStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED'
+export interface ExamPaper {
+  id: string
+  subjectId: string
+  status: ExamStatus
+  params?: Record<string, unknown>
+  result?: Record<string, unknown>
+  createdAt?: string
+  updatedAt?: string
+}
+
 // Epoch III: Workspace shared types
 
 export interface WidgetPosition {
@@ -156,4 +204,57 @@ export interface NoteDto {
   content: any
   createdAt: string
   updatedAt: string
+}
+
+// Notes graph contracts (Second Brain)
+export interface NoteGraphNode {
+  id: string
+  subjectId: string
+  title: string
+}
+
+export interface NoteGraphEdge {
+  from: string
+  to: string
+}
+
+export interface NoteGraphResponse {
+  nodes: NoteGraphNode[]
+  edges: NoteGraphEdge[]
+}
+
+// Backlinks response contract
+export type NoteBacklink = Pick<NoteDto, 'id' | 'subjectId' | 'title' | 'updatedAt'>
+export interface NoteBacklinksResponse {
+  backlinks: NoteBacklink[]
+}
+
+// Global Aggregated Search contracts (Notes + Documents)
+export interface GlobalSearchNoteHit {
+  id: string
+  subjectId: string
+  title: string
+  updatedAt: string
+}
+
+export interface GlobalSearchDocumentHit {
+  id: string
+  subjectId: string
+  filename: string
+  createdAt: string
+}
+
+export interface GlobalSearchResponse {
+  notes: GlobalSearchNoteHit[]
+  documents: GlobalSearchDocumentHit[]
+}
+
+// Auth contracts (used across client and server)
+export interface LoginResponse {
+  accessToken: string
+  user: {
+    id: string
+    email: string
+    hasConsentedToAi: boolean
+  }
 }

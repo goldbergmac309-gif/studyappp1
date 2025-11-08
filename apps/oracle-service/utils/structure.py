@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 import re
 
 
@@ -98,12 +98,72 @@ def _detect_questions(text: str) -> bool:
     return qmarks >= 3 or question_words >= 2
 
 
+def _estimate_sections(headings: List[Dict[str, Any]]) -> Tuple[int, List[str]]:
+    count = len(headings)
+    titles = [h.get("title") for h in headings[:6] if isinstance(h, dict) and h.get("title")]
+    return count, titles
+
+
+def _estimate_mcq_ratio(text: str) -> float:
+    # Count occurrences of option patterns like (A) (B) (C) (D)
+    options = re.findall(r"\([A-D]\)", text)
+    # Approximate number of questions: occurrences of 'Question' tokens or numbered headings
+    q_tokens = re.findall(r"\bquestion\b|^\s*\d+[\)\.:]", text, flags=re.IGNORECASE | re.MULTILINE)
+    approx_q = max(1, len(q_tokens))
+    ratio = min(1.0, (len(options) / float(approx_q)) / 2.0)
+    return round(ratio, 3)
+
+
+def _marks_list(text: str) -> List[int]:
+    vals = []
+    for m in re.findall(r"(\d{1,3})\s*marks?", text, flags=re.IGNORECASE):
+        try:
+            vals.append(int(m))
+        except Exception:
+            continue
+    return vals
+
+
+def _marks_histogram(marks: List[int]) -> Dict[str, int]:
+    hist = {"small": 0, "medium": 0, "large": 0}
+    for v in marks:
+        if v <= 5:
+            hist["small"] += 1
+        elif v <= 10:
+            hist["medium"] += 1
+        else:
+            hist["large"] += 1
+    return hist
+
+
+def _big_last_question(text: str, last_mark: int | None, max_mark: int | None) -> bool:
+    if last_mark is None or max_mark is None or max_mark <= 0:
+        return False
+    # Heuristic: last question has >= 50% of max question marks
+    return last_mark >= max(5, int(0.5 * max_mark))
+
+
 def compute_document_meta(text: str) -> Dict[str, Any]:
     text = text or ""
+    headings = _extract_headings(text)
+    section_count, section_titles = _estimate_sections(headings)
+    marks_vals = _marks_list(text)
+    max_mark = max(marks_vals) if marks_vals else None
+    last_mark = marks_vals[-1] if marks_vals else None
+    exam_template = {
+        "sectionCount": section_count,
+        "sectionTitles": section_titles,
+        "mcqRatio": _estimate_mcq_ratio(text),
+        "marksTotal": sum(marks_vals) if marks_vals else 0,
+        "maxQuestionMarks": max_mark,
+        "marksHistogram": _marks_histogram(marks_vals),
+        "bigLastQuestion": _big_last_question(text, last_mark, max_mark),
+    }
     return {
         "lang": _detect_lang(text),
         "headingCount": _estimate_headings(text),
-        "headings": _extract_headings(text),
+        "headings": headings,
         "detectedResourceType": _detect_resource_type(text),
         "detectedQuestions": _detect_questions(text),
+        "examTemplate": exam_template,
     }

@@ -1,0 +1,4 @@
+{
+  "localAuth": "{\"state\":{\"token\":\"test-token-1760909080313-8v2frctvzrg\",\"user\":{\"id\":\"u-consent\",\"email\":\"user@example.com\",\"hasConsentedToAi\":true}},\"version\":1}",
+  "sessionCooldown": "1760909106715"
+}

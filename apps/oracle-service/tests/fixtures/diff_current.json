@@ -1,0 +1,14 @@
+{
+  "insight": {
+    "conceptOverview": [
+      { "label": "algorithm", "mastery": 0.7 },
+      { "label": "posterior", "mastery": 0.6 }
+    ]
+  },
+  "conceptGraph": {
+    "concepts": [
+      { "label": "algorithm", "masteryScore": 0.7 },
+      { "label": "posterior", "masteryScore": 0.6 }
+    ]
+  }
+}

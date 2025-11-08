@@ -3,20 +3,57 @@ generator client {
   // output disabled to use Prisma's default location compatible with pnpm
 }
 
+// --- Insight Sessions (Phase C) ---
+
+enum InsightSessionStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+model InsightSession {
+  id        String  @id @default(cuid())
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  documentIds Json
+  status      InsightSessionStatus @default(PENDING)
+  result      Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([subjectId])
+}
+
+// Resources can be various learning materials, not just exams
+enum ResourceType {
+  EXAM
+  SYLLABUS
+  LECTURE_NOTES
+  TEXTBOOK
+  PRACTICE_SET
+  NOTES
+  OTHER
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  subjects  Subject[]
-  blueprints Blueprint[] @relation("UserBlueprints")
+  id               String          @id @default(cuid())
+  email            String          @unique
+  password         String
+  name             String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  hasConsentedToAi Boolean         @default(false)
+  subjects         Subject[]
+  blueprints       Blueprint[]     @relation("UserBlueprints")
+  teacherProfile   TeacherProfile?
+  refreshTokenHash String?
 }
 
 model Subject {
@@ -26,32 +63,40 @@ model Subject {
   updatedAt DateTime @updatedAt
 
   // Metadata (Epoch II)
-  courseCode    String?
-  professorName String?
-  ambition      String?
-  color         String?
-  starred       Boolean  @default(false)
-  archivedAt    DateTime?
+  courseCode     String?
+  professorName  String?
+  ambition       String?
+  color          String?
+  starred        Boolean   @default(false)
+  archivedAt     DateTime?
   lastAccessedAt DateTime?
 
   // Relation to User (owner)
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   // Back-relation
-  documents  Document[]
-  topics     SubjectTopics?
+  documents        Document[]
+  topics           SubjectTopics?
+  insightSessions  InsightSession[]
+  questions        Question[]
+  concepts         SubjectConcept[]
+  questionFamilies QuestionFamily[]
+  examTemplates    ExamTemplate[]
+  insightVersions  SubjectInsightVersion[]
+  history          SubjectHistory[]
   // Notes (Epoch I, Sprint 2)
-  notes      Note[]
+  notes            Note[]
   // Exams (Epoch II Prophetic Exam Generator)
-  examPapers ExamPaper[]
+  examPapers       ExamPaper[]
 
   // Workspace extensions (Epoch III)
   blueprintId  String?
-  activeLayout Blueprint?     @relation("SubjectActiveLayout", fields: [blueprintId], references: [id])
+  activeLayout Blueprint?       @relation("SubjectActiveLayout", fields: [blueprintId], references: [id])
   widgets      WidgetInstance[]
   // Board configuration (backgrounds, grid density etc.)
   boardConfig  Json?
+  ConceptLink  ConceptLink[]
 }
 
 // Document processing status enum
@@ -72,10 +117,17 @@ model Document {
   updatedAt DateTime @updatedAt
 
   // Relations
-  subjectId String
-  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectId      String
+  subject        Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   analysisResult AnalysisResult?
-  chunks    DocumentChunk[]
+  chunks         DocumentChunk[]
+
+  // Study Suite extensions
+  resourceType ResourceType @default(OTHER)
+  meta         Json?
+
+  structure DocumentStructure?
+  questions Question[]
 }
 
 model AnalysisResult {
@@ -85,7 +137,7 @@ model AnalysisResult {
   createdAt     DateTime @default(now())
 
   // Relations
-  documentId String @unique
+  documentId String   @unique
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 }
 
@@ -100,16 +152,16 @@ model DocumentChunk {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  @@unique([documentId, index])
-  @@index([documentId])
-
   // Back-relation to Embedding (1:1)
   embedding Embedding?
+
+  @@unique([documentId, index])
+  @@index([documentId])
 }
 
 model Embedding {
-  chunkId   String        @id
-  chunk     DocumentChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  chunkId String        @id
+  chunk   DocumentChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
 
   model     String
   dim       Int
@@ -118,28 +170,254 @@ model Embedding {
   createdAt DateTime @default(now())
 }
 
+// --- Exam Intelligence Models ---
+
+enum AssessmentMode {
+  UNKNOWN
+  OBJECTIVE
+  SUBJECTIVE
+  PRACTICAL
+  ORAL
+  ESSAY
+  THEORY
+  APPLICATION
+  CALCULATION
+  DEFINITION
+  COMPARISON
+  GENERAL
+}
+
+enum ConceptRelationType {
+  PREREQUISITE
+  SUPPORTS
+  CONFLICTS
+  DERIVED
+  PEER
+}
+
+enum InsightVersionStatus {
+  DRAFT
+  PROCESSING
+  READY
+  FAILED
+  ARCHIVED
+}
+
+model DocumentStructure {
+  id            String   @id @default(cuid())
+  documentId    String   @unique
+  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  schemaVersion String   @default("v1")
+  pageCount     Int?
+  ocrConfidence Float?
+  layout        Json? // section + block level layout metadata
+  outline       Json? // TOC style outline + detected anchors
+  stats         Json? // aggregated stats (question counts, marks, etc.)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  questions Question[]
+}
+
+model Question {
+  id             String             @id @default(cuid())
+  documentId     String
+  document       Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  structureId    String?
+  structure      DocumentStructure? @relation(fields: [structureId], references: [id], onDelete: SetNull)
+  subjectId      String
+  subject        Subject            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  index          Int
+  prompt         String
+  answer         String?
+  marks          Float?
+  marksConfidence Float?
+  hasNonText     Boolean            @default(false)
+  difficulty     Float?
+  assessmentMode AssessmentMode     @default(UNKNOWN)
+  taxonomyPath   String?
+  solutionProfile Json?
+  detectedAt     DateTime           @default(now())
+  meta           Json?
+
+  concepts          QuestionConceptScore[]
+  familyMemberships QuestionFamilyMembership[]
+
+  @@unique([documentId, index])
+  @@index([subjectId])
+  @@index([assessmentMode])
+}
+
+model SubjectConcept {
+  id           String   @id @default(cuid())
+  subjectId    String
+  subject      Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  slug         String
+  label        String
+  description  String?
+  taxonomyPath String?
+  masteryScore Float? // 0-1 normalized mastery estimate
+  difficulty   Float?
+  coverage     Float? // % coverage in docs/exams
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  outgoingLinks  ConceptLink[]          @relation("ConceptLinkFrom")
+  incomingLinks  ConceptLink[]          @relation("ConceptLinkTo")
+  questionScores QuestionConceptScore[]
+
+  @@unique([subjectId, slug])
+  @@index([subjectId])
+}
+
+model QuestionConceptScore {
+  questionId String
+  question   Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  conceptId  String
+  concept    SubjectConcept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+  weight     Float? // relative weight vs other concepts
+  confidence Float?
+  rationale  String?
+
+  @@id([questionId, conceptId])
+}
+
+model ConceptLink {
+  id            String              @id @default(cuid())
+  subjectId     String
+  subject       Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  fromConceptId String
+  toConceptId   String
+  relation      ConceptRelationType
+  weight        Float?
+  metadata      Json?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  fromConcept SubjectConcept @relation("ConceptLinkFrom", fields: [fromConceptId], references: [id], onDelete: Cascade)
+  toConcept   SubjectConcept @relation("ConceptLinkTo", fields: [toConceptId], references: [id], onDelete: Cascade)
+
+  @@unique([fromConceptId, toConceptId, relation])
+  @@index([subjectId])
+}
+
+model QuestionFamily {
+  id         String   @id @default(cuid())
+  subjectId  String
+  subject    Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  label      String
+  archetype  String?
+  difficulty Float?
+  frequency  Int? // historical count of appearances
+  synopsis   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  memberships QuestionFamilyMembership[]
+
+  @@unique([subjectId, label])
+  @@index([subjectId])
+}
+
+model QuestionFamilyMembership {
+  questionId String
+  question   Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  familyId   String
+  family     QuestionFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  role       String? // e.g., exemplar, variant, synthetic
+  createdAt  DateTime       @default(now())
+
+  @@id([questionId, familyId])
+}
+
+model ExamTemplate {
+  id          String    @id @default(cuid())
+  subjectId   String
+  subject     Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  version     Int       @default(1)
+  season      String?
+  blueprint   Json // structured plan (sections, marks, durations)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
+
+  @@unique([subjectId, version])
+}
+
+model SubjectInsightVersion {
+  id             String               @id @default(cuid())
+  subjectId      String
+  subject        Subject              @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  version        Int
+  sessionId      String?
+  status         InsightVersionStatus @default(DRAFT)
+  payload        Json?
+  forecast       Json? // structured forecast probabilities / archetypes
+  diffs          Json? // comparison vs previous version
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  publishedAt    DateTime?
+  SubjectHistory SubjectHistory[]
+
+  @@unique([subjectId, version])
+  @@index([sessionId])
+}
+
+model SubjectHistory {
+  id                String                 @id @default(cuid())
+  subjectId         String
+  subject           Subject                @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  eventDate         DateTime
+  eventType         String // e.g., EXAM_SAT, QUIZ, TEACHER_FEEDBACK
+  actuals           Json? // actual exam results, metrics, concept performance
+  comparedVersionId String?
+  insightVersion    SubjectInsightVersion? @relation(fields: [comparedVersionId], references: [id], onDelete: SetNull)
+  createdAt         DateTime               @default(now())
+
+  @@index([subjectId, eventDate])
+  @@index([comparedVersionId])
+}
+
+model TeacherProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization String?
+  specialties  Json? // preferred subjects / concepts
+  preferences  Json? // assessment preferences, streaming consent etc.
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 // --- Notes (Second Brain Genesis) ---
 
 model Note {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   subjectId String
-  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
-  title     String
-  content   Json
+  title   String
+  content Json
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  versions  NoteVersion[]
+  versions NoteVersion[]
+
+  // Optional back-relations for NoteLink edges
+  outgoingLinks NoteLink[] @relation("NoteLinkFrom")
+  incomingLinks NoteLink[] @relation("NoteLinkTo")
 
   @@index([subjectId, updatedAt])
+  @@index([title])
 }
 
 model NoteVersion {
-  id        String   @id @default(cuid())
-  noteId    String
-  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  noteId String
+  note   Note   @relation(fields: [noteId], references: [id], onDelete: Cascade)
 
   title     String
   content   Json
@@ -149,26 +427,39 @@ model NoteVersion {
   @@index([noteId, createdAt])
 }
 
+// Precomputed edges between notes for fast backlinks/graph queries
+model NoteLink {
+  fromNoteId String
+  fromNote   Note     @relation("NoteLinkFrom", fields: [fromNoteId], references: [id], onDelete: Cascade)
+  toNoteId   String
+  toNote     Note     @relation("NoteLinkTo", fields: [toNoteId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@id([fromNoteId, toNoteId])
+  @@index([toNoteId])
+  @@index([fromNoteId])
+}
+
 // --- Workspace Models ---
 
 // Pre-defined templates for a subject's canvas
 model Persona {
   id      String @id @default(cuid())
   name    String @unique // e.g., "STEM Lab", "Humanities Hub"
-  widgets Json   // Default set of widgets and their initial configuration
+  widgets Json // Default set of widgets and their initial configuration
 }
 
 // A user's saved layout configuration
 model Blueprint {
-  id     String @id @default(cuid())
-  userId String
-  user   User   @relation("UserBlueprints", fields: [userId], references: [id], onDelete: Cascade)
-  name   String   // e.g., "My Weekly Planner Layout"
-  layout Json     // The saved positions and sizes of widgets
-
-  @@unique([userId, name])
+  id       String    @id @default(cuid())
+  userId   String
+  user     User      @relation("UserBlueprints", fields: [userId], references: [id], onDelete: Cascade)
+  name     String // e.g., "My Weekly Planner Layout"
+  layout   Json // The saved positions and sizes of widgets
   // Back-relation to Subjects that reference this Blueprint as active layout
   subjects Subject[] @relation("SubjectActiveLayout")
+
+  @@unique([userId, name])
 }
 
 // An instance of a widget on a specific subject's canvas
@@ -177,10 +468,10 @@ model WidgetInstance {
   subjectId String
   subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   type      WidgetType // The type of widget (e.g., NOTES, MIND_MAP)
-  position  Json       // { x, y } coordinates
-  size      Json       // { width, height } dimensions
-  content   Json       // The specific data for this widget instance
-  style     Json?      // Presentation style: accent, bg, elevation, radius
+  position  Json // { x, y } coordinates
+  size      Json // { width, height } dimensions
+  content   Json // The specific data for this widget instance
+  style     Json? // Presentation style: accent, bg, elevation, radius
 
   @@index([subjectId])
 }
@@ -218,14 +509,14 @@ enum ExamStatus {
 }
 
 model ExamPaper {
-  id        String      @id @default(cuid())
+  id        String     @id @default(cuid())
   subjectId String
-  subject   Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  status    ExamStatus  @default(PENDING)
+  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  status    ExamStatus @default(PENDING)
   params    Json?
   result    Json?
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   @@index([subjectId])
 }

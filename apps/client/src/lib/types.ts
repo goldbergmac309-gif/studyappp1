@@ -1,19 +1,6 @@
-// Shared client-side types mirrored from backend contracts
-// These types enforce compile-time safety across API usage, components, and state.
-
-export type DocumentStatus =
-  | 'UPLOADED'
-  | 'QUEUED'
-  | 'PROCESSING'
-  | 'COMPLETED'
-  | 'FAILED'
-
-export interface Document {
-  id: string
-  filename: string
-  status: DocumentStatus
-  createdAt: string // ISO timestamp string
-}
+// Shared client-side types
+// Use canonical contracts from @studyapp/shared-types to avoid drift
+export type { DocumentDto as Document, DocumentStatus, ResourceType } from '@studyapp/shared-types'
 
 export interface AnalysisKeyword {
   term: string

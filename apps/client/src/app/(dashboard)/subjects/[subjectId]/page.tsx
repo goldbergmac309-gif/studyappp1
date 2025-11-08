@@ -6,6 +6,7 @@ import { AlertCircle, History } from "lucide-react"
 
 import api from "@/lib/api"
 import { isAxiosError } from "axios"
+import { toast } from "sonner"
 
 import {
   Breadcrumb,
@@ -23,7 +24,9 @@ import { Separator } from "@/components/ui/separator"
 import { CanvasGrid } from "@/app/(dashboard)/subjects/[subjectId]/_components/canvas/canvas-grid"
 import DocumentsTab from "@/app/(dashboard)/subjects/[subjectId]/_components/documents-tab"
 import NotesTab from "@/app/(dashboard)/subjects/[subjectId]/_components/notes-tab"
+import InsightsTab from "@/app/(dashboard)/subjects/[subjectId]/_components/insights-tab"
 import { useDocumentPolling } from "@/lib/hooks/useDocumentPolling"
+import type { ResourceType } from "@/lib/types"
 
 interface Subject { id: string; name: string }
 
@@ -38,6 +41,7 @@ export default function SubjectWorkspacePage() {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [resourceType, setResourceType] = useState<ResourceType>("OTHER")
 
   // Own the unified polling lifecycle for this subject (for resources/documents)
   const { start, stop } = useDocumentPolling(subjectId, { autoStart: false })
@@ -97,6 +101,9 @@ export default function SubjectWorkspacePage() {
         setUploadProgress(0)
         const form = new FormData()
         form.append("file", file)
+        if (resourceType) {
+          form.append("resourceType", resourceType)
+        }
         await api.post(`/subjects/${subjectId}/documents`, form, {
           onUploadProgress: (evt) => {
             if (!evt.total) return
@@ -104,14 +111,35 @@ export default function SubjectWorkspacePage() {
             setUploadProgress(pct)
           },
         })
-      } catch {
-        // handled inside DocumentsTab via toast on retry, keep page quiet
+      } catch (err: unknown) {
+        if (isAxiosError(err)) {
+          const status = err.response?.status
+          const data: any = err.response?.data
+          const msg = (data && (data.message || data.error)) || err.message
+          if (status === 415) {
+            toast.error("Unsupported file type", {
+              description: typeof msg === 'string' ? msg : 'Allowed: PDF, TXT, MD, DOCX, DOC',
+            })
+          } else if (status === 413) {
+            toast.error("File too large", {
+              description: typeof msg === 'string' ? msg : 'Try a smaller file or compress the document.',
+            })
+          } else if (status === 400) {
+            toast.error("Upload blocked: malware detected", {
+              description: typeof msg === 'string' ? msg : 'Your upload was flagged by the malware scanner.',
+            })
+          } else {
+            toast.error("Upload failed", {
+              description: typeof msg === 'string' ? msg : 'An unexpected error occurred.',
+            })
+          }
+        }
       } finally {
         setUploading(false)
         setUploadProgress(0)
       }
     },
-    [subjectId]
+    [subjectId, resourceType]
   )
 
   return (
@@ -173,6 +201,7 @@ export default function SubjectWorkspacePage() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="notes">Notes</TabsTrigger>
             <TabsTrigger value="resources">Resources</TabsTrigger>
+            <TabsTrigger value="insights">Insights</TabsTrigger>
             <TabsTrigger value="practice">Practice</TabsTrigger>
           </TabsList>
           <TabsContent value="overview" className="space-y-4">
@@ -188,7 +217,12 @@ export default function SubjectWorkspacePage() {
               onSelectFiles={(files) => onDrop(files)}
               onRetry={() => start()}
               ref={fileInputRef}
+              selectedResourceType={resourceType}
+              onChangeResourceType={setResourceType}
             />
+          </TabsContent>
+          <TabsContent value="insights" className="space-y-4">
+            <InsightsTab />
           </TabsContent>
           <TabsContent value="practice" className="space-y-4">
             <div className="text-sm text-muted-foreground">Practice view — coming soon.</div>

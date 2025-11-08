@@ -1,0 +1,1 @@
+{"statusCode":500,"message":"\nInvalid `prisma.user.findUnique()` invocation:\n\n\nCan't reach database server at `postgres:5432`\n\nPlease make sure your database server is running at `postgres:5432`.","error":"PrismaClientKnownRequestError","timestamp":"2025-11-05T01:31:53.822Z"}

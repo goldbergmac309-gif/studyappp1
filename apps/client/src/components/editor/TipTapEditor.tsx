@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from "react"
-import { EditorContent, useEditor, type Editor } from "@tiptap/react"
+import { EditorContent, useEditor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Placeholder from "@tiptap/extension-placeholder"
 import Heading from "@tiptap/extension-heading"
@@ -23,7 +23,7 @@ type TipTapEditorProps = {
   className?: string
 }
 
-function FloatingToolbar({ editor, visible, pos, setVisible, setPos }: { editor: Editor; visible: boolean; pos: { left: number; top: number }; setVisible: (v: boolean) => void; setPos: (p: { left: number; top: number }) => void }) {
+function FloatingToolbar({ editor, visible, pos, setVisible, setPos }: { editor: any; visible: boolean; pos: { left: number; top: number }; setVisible: (v: boolean) => void; setPos: (p: { left: number; top: number }) => void }) {
   useEffect(() => {
     if (!editor) return
     const update = () => {
@@ -101,7 +101,7 @@ export function TipTapEditor({ value, onChange, placeholder = "Start writing…"
         class: "prose prose-neutral dark:prose-invert max-w-none focus:outline-none",
       },
     },
-    onUpdate: ({ editor }: { editor: Editor }) => {
+    onUpdate: ({ editor }: { editor: any }) => {
       try {
         const json = editor.getJSON()
         onChange(json)

@@ -4,8 +4,19 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { createHmac, createHash } from 'crypto';
 
 const INTERNAL_KEY = 'test-internal-key';
+const INTERNAL_SECRET = 'test-internal-secret';
+
+function sign(method: string, path: string, body: unknown, secret: string) {
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const bodyStr = JSON.stringify(body ?? {});
+  const bodySha = createHash('sha256').update(bodyStr).digest('hex');
+  const toSign = `${ts}.${method.toUpperCase()}.${path}.${bodySha}`;
+  const sig = createHmac('sha256', secret).update(toSign).digest('hex');
+  return { ts, bodySha, sig } as const;
+}
 
 describe('Subject Topics V2 (e2e)', () => {
   let app: INestApplication;
@@ -13,6 +24,7 @@ describe('Subject Topics V2 (e2e)', () => {
 
   beforeEach(async () => {
     process.env.INTERNAL_API_KEY = INTERNAL_KEY;
+    process.env.INTERNAL_API_SECRET = INTERNAL_SECRET;
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -82,11 +94,17 @@ describe('Subject Topics V2 (e2e)', () => {
       ],
     };
 
-    await request(app.getHttpServer())
-      .put(`/internal/subjects/${subjectId}/topics`)
-      .set('X-Internal-API-Key', INTERNAL_KEY)
-      .send(payload)
-      .expect(200);
+    {
+      const path = `/internal/subjects/${subjectId}/topics`;
+      const { ts, bodySha, sig } = sign('PUT', path, payload, INTERNAL_SECRET);
+      await request(app.getHttpServer())
+        .put(path)
+        .set('X-Timestamp', ts)
+        .set('X-Body-SHA256', bodySha)
+        .set('X-Signature', sig)
+        .send(payload)
+        .expect(200);
+    }
 
     // Public GET returns topics envelope
     const res = await request(app.getHttpServer())

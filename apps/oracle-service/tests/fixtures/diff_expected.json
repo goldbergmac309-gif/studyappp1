@@ -1,0 +1,22 @@
+{
+  "masteryChanges": [
+    {
+      "label": "algorithm",
+      "before": 0.5,
+      "after": 0.7,
+      "delta": 0.2
+    },
+    {
+      "label": "posterior",
+      "before": 0.0,
+      "after": 0.6,
+      "delta": 0.6
+    },
+    {
+      "label": "old concept",
+      "before": 0.4,
+      "after": 0.0,
+      "delta": -0.4
+    }
+  ]
+}

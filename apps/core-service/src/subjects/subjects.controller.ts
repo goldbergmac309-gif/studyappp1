@@ -14,24 +14,32 @@ import {
 } from '@nestjs/common';
 import type { Request as ExpressRequest } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { SubjectsService } from './subjects.service';
+import { AiConsentGuard } from '../auth/guards/ai-consent.guard';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
 import { SearchDto } from './dto/search.dto';
+import { SubjectsCrudService } from './subjects-crud.service';
+import { SubjectsSearchService } from './subjects-search.service';
+import { SubjectsTopicsService } from './subjects-topics.service';
 
 type AuthRequest = ExpressRequest & { user: { id: string; email: string } };
 
 @Controller('subjects')
 @UseGuards(JwtAuthGuard)
 export class SubjectsController {
-  constructor(private readonly subjectsService: SubjectsService) {}
+  constructor(
+    private readonly crud: SubjectsCrudService,
+    private readonly searchSvc: SubjectsSearchService,
+    private readonly topics: SubjectsTopicsService,
+  ) {}
 
   @Post()
   create(
     @Body() createSubjectDto: CreateSubjectDto,
     @Request() req: AuthRequest,
   ) {
-    return this.subjectsService.create(createSubjectDto, req.user.id);
+    return this.crud.create(createSubjectDto, req.user.id);
   }
 
   @Get()
@@ -43,17 +51,12 @@ export class SubjectsController {
   ) {
     const p = Number.isFinite(Number(page)) ? Number(page) : 1;
     const ps = Number.isFinite(Number(pageSize)) ? Number(pageSize) : 50;
-    return this.subjectsService.findAllByUser(
-      req.user.id,
-      filter ?? 'recent',
-      p,
-      ps,
-    );
+    return this.crud.findAllByUser(req.user.id, filter ?? 'recent', p, ps);
   }
 
   @Get(':id')
   async findOne(@Param('id') id: string, @Request() req: AuthRequest) {
-    const subject = await this.subjectsService.findOneForUser(id, req.user.id);
+    const subject = await this.crud.findOneForUser(id, req.user.id);
     if (!subject) {
       throw new NotFoundException('Subject not found');
     }
@@ -66,46 +69,44 @@ export class SubjectsController {
     @Body() updateSubjectDto: UpdateSubjectDto,
     @Request() req: AuthRequest,
   ) {
-    return this.subjectsService.updateSubject(
-      req.user.id,
-      id,
-      updateSubjectDto,
-    );
+    return this.crud.updateSubject(req.user.id, id, updateSubjectDto);
   }
 
   @Delete(':id')
   @HttpCode(204)
   async archive(@Param('id') id: string, @Request() req: AuthRequest) {
-    await this.subjectsService.archiveSubject(req.user.id, id);
+    await this.crud.archiveSubject(req.user.id, id);
   }
 
   @Post(':id/unarchive')
   @HttpCode(204)
   async unarchive(@Param('id') id: string, @Request() req: AuthRequest) {
-    await this.subjectsService.unarchiveSubject(req.user.id, id);
+    await this.crud.unarchiveSubject(req.user.id, id);
   }
 
   @Post(':id/reindex')
   @HttpCode(202)
   async reindex(@Param('id') id: string, @Request() req: AuthRequest) {
-    return await this.subjectsService.reindexSubject(req.user.id, id);
+    return await this.crud.reindexSubject(req.user.id, id);
   }
 
   @Get(':id/search')
+  @UseGuards(JwtAuthGuard, AiConsentGuard, ThrottlerGuard)
+  @Throttle({
+    search: {
+      getTracker: (req: AuthRequest) => req.user.id,
+    },
+  })
   async search(
     @Param('id') id: string,
     @Request() req: AuthRequest,
     @Query() query: SearchDto,
   ) {
-    return await this.subjectsService.searchSubjectChunks(
-      req.user.id,
-      id,
-      query,
-    );
+    return await this.searchSvc.searchSubjectChunks(req.user.id, id, query);
   }
 
   @Get(':id/topics')
   async getTopics(@Param('id') id: string, @Request() req: AuthRequest) {
-    return await this.subjectsService.getSubjectTopics(req.user.id, id);
+    return await this.topics.getSubjectTopics(req.user.id, id);
   }
 }

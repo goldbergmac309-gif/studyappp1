@@ -29,4 +29,10 @@ export class SearchDto {
   @Min(0)
   @Max(1)
   threshold?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
 }

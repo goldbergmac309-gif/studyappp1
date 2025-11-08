@@ -14,26 +14,19 @@ const notesBySubject = new Map() // subjectId -> Array<Note>
 const documentsBySubject = new Map() // subjectId -> Array<Document>
 const chunksBySubject = new Map() // subjectId -> Array<{ documentId, index, text, embedding:number[] }>
 const exams = new Map() // examId -> { id, subjectId, status, params, result }
+const usersByToken = new Map() // token -> { id, email, hasConsentedToAi?: boolean }
 
 const INTERNAL_KEY = process.env.INTERNAL_API_KEY || 'dev-internal-key'
 
 function json(res, status, data) {
   const body = JSON.stringify(data)
-  res.writeHead(status, {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
-  })
+  // CORS headers are set at the top of the request handler; only set Content-Type here
+  res.writeHead(status, { 'Content-Type': 'application/json' })
   res.end(body)
 }
 
 function noContent(res) {
-  res.writeHead(204, {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
-  })
+  res.writeHead(204)
   res.end()
 }
 
@@ -50,9 +43,29 @@ function readBody(req) {
 }
 
 const server = http.createServer(async (req, res) => {
-  const { pathname } = parse(req.url, true)
+  const { pathname, query } = parse(req.url, true)
+  // Set permissive-but-correct CORS for credentialed requests
+  const origin = req.headers['origin'] || '*'
+  res.setHeader('Access-Control-Allow-Origin', origin)
+  res.setHeader('Vary', 'Origin')
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS')
   // CORS preflight
   if (req.method === 'OPTIONS') {
+    return noContent(res)
+  }
+
+  // Test harness reset: clear all in-memory state
+  if (req.method === 'POST' && pathname === '/__reset') {
+    try {
+      subjects.length = 0
+      notesBySubject.clear()
+      documentsBySubject.clear()
+      chunksBySubject.clear()
+      exams.clear()
+      usersByToken.clear()
+    } catch {}
     return noContent(res)
   }
 
@@ -60,6 +73,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && pathname === '/auth/signup') {
     const body = await readBody(req)
     const user = { id: `u-${userSeq++}`, email: String(body?.email || 'user@example.com') }
+    usersByToken.set('test-token', { ...user, hasConsentedToAi: false })
     return json(res, 201, { accessToken: 'test-token', user })
   }
 
@@ -69,20 +83,92 @@ const server = http.createServer(async (req, res) => {
     const email = String(body?.email || 'user@example.com')
     // deterministic id for mock login
     const user = { id: 'u-login', email }
+    usersByToken.set('test-token', { ...user, hasConsentedToAi: false })
     return json(res, 200, { accessToken: 'test-token', user })
+  }
+
+  // Refresh-token (mock): always return the stored user for the test token
+  if (req.method === 'POST' && pathname === '/auth/refresh-token') {
+    // Require a cookie that looks like a refresh token; otherwise fail with 401 to simulate httpOnly cookie check
+    const cookie = String(req.headers['cookie'] || '')
+    if (!/refresh_token=/.test(cookie)) {
+      return json(res, 401, { message: 'Unauthorized' })
+    }
+    const auth = req.headers['authorization'] || ''
+    const token = String(auth).startsWith('Bearer ') ? String(auth).slice(7) : 'test-token'
+    const user = usersByToken.get(token) || { id: 'u-refresh', email: 'user@example.com', hasConsentedToAi: false }
+    usersByToken.set(token, user)
+    return json(res, 200, { accessToken: token, user })
+  }
+
+  // Consent endpoint
+  if (req.method === 'POST' && pathname === '/users/@me/consent-ai') {
+    const auth = req.headers['authorization'] || ''
+    const token = String(auth).startsWith('Bearer ') ? String(auth).slice(7) : 'test-token'
+    const curr = usersByToken.get(token) || { id: 'u-consent', email: 'user@example.com' }
+    const next = { ...curr, hasConsentedToAi: true }
+    usersByToken.set(token, next)
+    return json(res, 200, next)
   }
 
   // Subjects list (simple tab filter ignored)
   if (req.method === 'GET' && pathname === '/subjects') {
-    return json(res, 200, subjects)
+    // Filter support: recent|starred|all|archived
+    const filter = String((query && query.filter) || 'recent').toLowerCase()
+    let list = subjects.slice()
+    if (filter === 'archived') {
+      list = list.filter((s) => !!s.archivedAt)
+    } else if (filter === 'starred') {
+      list = list.filter((s) => !!s.starred && !s.archivedAt)
+    } else {
+      // recent or all -> non-archived
+      list = list.filter((s) => !s.archivedAt)
+    }
+    return json(res, 200, list)
   }
 
   // Create subject
   if (req.method === 'POST' && pathname === '/subjects') {
     const body = await readBody(req)
-    const s = { id: `s-${subjectSeq++}`, name: String(body?.name || 'Untitled') }
+    const now = new Date().toISOString()
+    const s = { id: `s-${subjectSeq++}`, name: String(body?.name || 'Untitled'), createdAt: now, updatedAt: now, starred: false, archivedAt: null }
     subjects.push(s)
     return json(res, 201, s)
+  }
+
+  // PATCH /subjects/:id and DELETE /subjects/:id
+  const subjIdPatch = pathname?.match(/^\/subjects\/([^\/]+)$/)
+  if (subjIdPatch) {
+    const subjectId = subjIdPatch[1]
+    const idx = subjects.findIndex((s) => s.id === subjectId)
+    if (idx === -1) return notFound(res)
+    if (req.method === 'PATCH') {
+      const body = await readBody(req)
+      const updated = {
+        ...subjects[idx],
+        ...(body?.name !== undefined ? { name: String(body.name) } : {}),
+        ...(body?.starred !== undefined ? { starred: !!body.starred } : {}),
+        updatedAt: new Date().toISOString(),
+      }
+      subjects[idx] = updated
+      return json(res, 200, updated)
+    }
+    if (req.method === 'DELETE') {
+      const updated = { ...subjects[idx], archivedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      subjects[idx] = updated
+      return noContent(res)
+    }
+  }
+
+  // POST /subjects/:id/unarchive
+  const subjUnarchive = pathname?.match(/^\/subjects\/([^\/]+)\/unarchive$/)
+  if (subjUnarchive && req.method === 'POST') {
+    const subjectId = subjUnarchive[1]
+    const idx = subjects.findIndex((s) => s.id === subjectId)
+    if (idx === -1) return notFound(res)
+    const updated = { ...subjects[idx], archivedAt: null, updatedAt: new Date().toISOString() }
+    subjects[idx] = updated
+    return json(res, 200, updated)
   }
 
   // Match /subjects/:id
@@ -178,6 +264,13 @@ const server = http.createServer(async (req, res) => {
 
     // Semantic search: /subjects/:id/search
     if (rest === 'search' && req.method === 'GET') {
+      // Enforce consent in MOCK mode to validate UI flow
+      const auth = req.headers['authorization'] || ''
+      const token = String(auth).startsWith('Bearer ') ? String(auth).slice(7) : 'test-token'
+      const u = usersByToken.get(token)
+      if (!u || !u.hasConsentedToAi) {
+        return json(res, 403, { code: 'AI_CONSENT_REQUIRED', message: 'AI Consent required' })
+      }
       const started = Date.now()
       const q = (parse(req.url, true).query || {}).query || ''
       const chunks = chunksBySubject.get(subjectId) || []
@@ -317,6 +410,14 @@ const server = http.createServer(async (req, res) => {
       const arr = documentsBySubject.get(subjectId) || []
       return json(res, 200, arr.map((d) => ({ id: d.id, s3Key: d.s3Key || '' })))
     }
+    // GET /internal/subjects/:id/chunks
+    const listChunks = pathname.match(/^\/internal\/subjects\/([^\/]+)\/chunks$/)
+    if (listChunks && req.method === 'GET') {
+      const subjectId = listChunks[1]
+      const arr = chunksBySubject.get(subjectId) || []
+      // return minimal info for tests
+      return json(res, 200, arr.map((c, i) => ({ id: `c-${i}`, index: c.index })))
+    }
     // PUT /internal/reindex/:subjectId/chunks
     const reindex = pathname.match(/^\/internal\/reindex\/([^\/]+)\/chunks$/)
     if (reindex && req.method === 'PUT') {
@@ -355,6 +456,16 @@ const server = http.createServer(async (req, res) => {
       exams.set(examId, ex)
       return json(res, 200, { ok: true })
     }
+  }
+
+  // Lightweight embed endpoint for MOCK mode
+  if (pathname === '/embed' && req.method === 'POST') {
+    const body = await readBody(req)
+    const text = String(body?.text || '')
+    const dim = 64
+    const base = Math.max(1, Math.min(1000, text.length))
+    const embedding = Array(dim).fill(0).map((_, i) => ((i % 13) + base) * 0.001)
+    return json(res, 200, { model: 'mock-miniLM', dim, embedding })
   }
 
   return notFound(res)

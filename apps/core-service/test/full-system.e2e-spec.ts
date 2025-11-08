@@ -6,6 +6,7 @@ import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { S3Service } from '../src/s3/s3.service';
 import { QueueService } from '../src/queue/queue.service';
+import { createHmac, createHash } from 'crypto';
 
 interface LoginResponse {
   accessToken: string;
@@ -50,6 +51,7 @@ describe('Full System (God Test) e2e', () => {
 
   beforeEach(async () => {
     process.env.INTERNAL_API_KEY = INTERNAL_KEY;
+    process.env.INTERNAL_API_SECRET = 'test-secret-internal';
 
     s3Mock = { putObject: jest.fn().mockResolvedValue(undefined) };
 
@@ -64,19 +66,33 @@ describe('Full System (God Test) e2e', () => {
         publishDocumentJob: ({ documentId }: { documentId: string }) => {
           // Simulate the oracle worker posting back after a short delay
           setTimeout(() => {
+            const path = `/internal/documents/${documentId}/analysis`;
+            const body = {
+              engineVersion: 'oracle-v1',
+              resultPayload: {
+                keywords: [
+                  { term: 'systems', score: 1.0 },
+                  { term: 'algorithms', score: 0.9 },
+                ],
+                metrics: { pages: 1, textLength: 12 },
+              },
+            };
+            const ts = Math.floor(Date.now() / 1000).toString();
+            const bodySha = createHash('sha256')
+              .update(JSON.stringify(body))
+              .digest('hex');
+            const sig = createHmac(
+              'sha256',
+              process.env.INTERNAL_API_SECRET || '',
+            )
+              .update(`${ts}.PUT.${path}.${bodySha}`)
+              .digest('hex');
             void request(app.getHttpServer())
-              .put(`/internal/documents/${documentId}/analysis`)
-              .set('X-Internal-API-Key', INTERNAL_KEY)
-              .send({
-                engineVersion: 'oracle-v1',
-                resultPayload: {
-                  keywords: [
-                    { term: 'systems', score: 1.0 },
-                    { term: 'algorithms', score: 0.9 },
-                  ],
-                  metrics: { pages: 1, textLength: 12 },
-                },
-              })
+              .put(path)
+              .set('X-Timestamp', ts)
+              .set('X-Body-SHA256', bodySha)
+              .set('X-Signature', sig)
+              .send(body)
               .catch(() => {
                 // ignore during tests
               });

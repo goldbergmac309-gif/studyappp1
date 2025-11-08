@@ -1,0 +1,17 @@
+services:
+  # Inject HMAC secret so oracle-worker can sign internal requests to core-service
+  oracle-worker:
+    environment:
+      CORE_SERVICE_URL: http://core-service:3000
+      INTERNAL_API_SECRET: dev-internal-secret
+      ENABLE_META_CALLBACK: "true"
+      AI_CONSENT: "true"
+      LLM_PROVIDER: "local"
+      ENGINE_PROVIDER: "local"
+      ENGINE_MODEL_NAME: intfloat/e5-small-v2
+      ENGINE_DIM: "1536"
+  # Ensure core-service validates HMAC signatures using the same secret
+  core-service:
+    environment:
+      INTERNAL_API_SECRET: dev-internal-secret
+      SKIP_MALWARE_SCAN: "true"

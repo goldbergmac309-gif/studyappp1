@@ -2,11 +2,14 @@
 
 import * as React from "react"
 import { semanticSearch } from "@/lib/api"
+import { useAuthStore } from "@/lib/store"
+import { getAiConsentNow } from "@/lib/ai-consent"
 import type { SemanticSearchHit } from "@studyapp/shared-types"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useAiConsent } from "@/hooks/useAiConsent"
 
 export function SemanticSearch({ subjectId }: { subjectId: string }) {
   const [q, setQ] = React.useState("")
@@ -15,11 +18,22 @@ export function SemanticSearch({ subjectId }: { subjectId: string }) {
   const [results, setResults] = React.useState<SemanticSearchHit[]>([])
   const acRef = React.useRef<AbortController | null>(null)
   const [activeIdx, setActiveIdx] = React.useState<number>(-1)
+  const { hasConsented, requestConsent } = useAiConsent()
 
-  const onSearch = React.useCallback(async () => {
+  const onSearch = React.useCallback(async (mode: 'auto' | 'explicit' = 'explicit') => {
     const query = q.trim()
     if (query.length < 2) {
       setResults([])
+      return
+    }
+    // Authoritative, centralized consent check (SSOT)
+    const consentNow = getAiConsentNow(useAuthStore.getState().user)
+    if (!consentNow) {
+      // In auto mode (debounced typing), do not open the modal. Only open on explicit action.
+      if (mode === 'explicit') {
+        // Defer to next tick so the originating click can complete before the dialog overlay mounts
+        setTimeout(() => { try { requestConsent() } catch {} }, 0)
+      }
       return
     }
     if (acRef.current) acRef.current.abort()
@@ -42,11 +56,11 @@ export function SemanticSearch({ subjectId }: { subjectId: string }) {
     } finally {
       setLoading(false)
     }
-  }, [q, subjectId])
+  }, [q, subjectId, hasConsented, requestConsent])
 
   React.useEffect(() => {
     if (q.trim().length >= 2) {
-      const t = setTimeout(onSearch, 400)
+      const t = setTimeout(() => { void onSearch('auto') }, 400)
       return () => clearTimeout(t)
     } else {
       setResults([])
@@ -80,7 +94,7 @@ export function SemanticSearch({ subjectId }: { subjectId: string }) {
           placeholder="Search your subject semantically…"
           className="max-w-xl"
         />
-        <Button onClick={onSearch} disabled={loading || q.trim().length < 2} variant="secondary">
+        <Button onClick={() => void onSearch('explicit')} disabled={q.trim().length < 2} variant="secondary">
           {loading ? "Searching…" : "Search"}
         </Button>
       </div>

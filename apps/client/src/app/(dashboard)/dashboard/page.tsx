@@ -1,12 +1,14 @@
 "use client"
 
 import { useEffect, useMemo, useState, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { AlertCircle, Clock, Star, Grid, Archive } from "lucide-react"
 import { isAxiosError } from "axios"
 
 import { listSubjects } from "@/lib/api"
 
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -18,10 +20,12 @@ import TopicsExplorer from "@/app/(dashboard)/dashboard/_components/topics-explo
 
 type Subject = { id: string; name: string }
 export default function DashboardPage() {
+  const router = useRouter()
   const [subjects, setSubjects] = useState<Subject[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<"recent" | "starred" | "all" | "archived">("recent")
+  const [dashQuery, setDashQuery] = useState("")
 
   useMemo(() => (subjects?.length ?? 0) > 0, [subjects])
 
@@ -49,6 +53,25 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* Global Search entry */}
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          const q = (dashQuery || "").trim()
+          if (q.length < 2) return
+          router.push(`/search?q=${encodeURIComponent(q)}`)
+        }}
+      >
+        <Input
+          value={dashQuery}
+          onChange={(e) => setDashQuery(e.target.value)}
+          placeholder="Search your knowledge"
+          className="w-full"
+        />
+        <Button type="submit">Search</Button>
+      </form>
+
       {/* Quick actions */}
       <QuickActions />
 

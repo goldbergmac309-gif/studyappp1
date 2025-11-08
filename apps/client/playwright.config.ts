@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { defineConfig, devices } from '@playwright/test'
 
 const CORE_PORT = +(process.env.CORE_PORT || 3001)
@@ -25,16 +26,19 @@ export default defineConfig({
   },
   // Auto-start dev servers for tests
   webServer: (() => {
-    type WebSrv = { command: string; cwd: string; port: number; reuseExistingServer?: boolean; env?: Record<string, string>; timeout?: number }
-    const clientCommand = USE_PROD ? 'sh -c "pnpm build && pnpm start -p 3100"' : 'pnpm dev'
+    type WebSrv = { command: string; cwd: string; port: number; url?: string; reuseExistingServer?: boolean; env?: Record<string, string>; timeout?: number }
+    const clientCommand = USE_PROD
+      ? `bash -lc 'PID=$(lsof -nP -iTCP:3100 -sTCP:LISTEN -t 2>/dev/null || true); if [ -n "$PID" ]; then kill -9 $PID; fi; pnpm build && pnpm start -p 3100'`
+      : `bash -lc 'PID=$(lsof -nP -iTCP:3100 -sTCP:LISTEN -t 2>/dev/null || true); if [ -n "$PID" ]; then kill -9 $PID; fi; pnpm dev'`
     const servers: WebSrv[] = [
       {
         command: clientCommand,
         cwd: __dirname,
         port: 3100,
-        reuseExistingServer: true,
+        reuseExistingServer: false,
         env: {
           NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001',
+          NEXT_PUBLIC_E2E_AUTH: process.env.NEXT_PUBLIC_E2E_AUTH || '1',
         },
         timeout: 300_000,
       },

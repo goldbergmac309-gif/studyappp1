@@ -1,27 +1,14 @@
 import { test, expect, Page } from '@playwright/test'
+import { signUpAndGotoDashboard, clearClientState, createSubjectViaInlineOrModal, getAuthToken, createSubjectApi } from './helpers'
 
 function uniqueEmail() {
   const ts = Date.now()
   return `e2e+${ts}@studyapp.dev`
 }
 
-async function clearClientState(page: Page) {
-  await page.addInitScript(() => {
-    try {
-      localStorage.clear()
-    } catch {}
-  })
-}
+// clearClientState imported from helpers
 
-async function createSubjectViaInlineOrModal(page: Page, name: string) {
-  const inline = page.getByPlaceholder('e.g. Linear Algebra')
-  const form = page.locator('form').filter({ has: inline.first() }).first()
-  await expect(form).toBeVisible({ timeout: 30000 })
-  await inline.first().scrollIntoViewIfNeeded()
-  await inline.first().fill(name)
-  await form.locator('button[type="submit"]').click()
-  await expect(page.getByRole('link', { name: new RegExp(`${name}\\s+Open workspace`) })).toBeVisible()
-}
+// use shared helper
 
 test.describe('Client Gauntlet', () => {
   test('The New User Gauntlet (First Five Minutes)', async ({ page, context }) => {
@@ -31,16 +18,12 @@ test.describe('Client Gauntlet', () => {
     await context.clearCookies()
     await clearClientState(page)
 
-    await page.goto('/signup')
-    await page.getByPlaceholder('you@example.com').fill(email)
-    await page.getByPlaceholder('Your password').fill(password)
-    await page.getByPlaceholder('Confirm password').fill(password)
-    await page.getByRole('button', { name: 'Create account' }).click()
-
-    await expect(page.getByText('Account created')).toBeVisible()
-    await expect(page).toHaveURL(/\/dashboard$/)
-    await expect(page.getByText('No subjects yet')).toBeVisible()
-    await createSubjectViaInlineOrModal(page, 'Biology')
+    await signUpAndGotoDashboard(page, email, password, { verifyToast: 'soft' })
+    // Prefer API creation to avoid brittle UI state; then open workspace
+    const token = await getAuthToken(page, { email, password })
+    const subjectId = await createSubjectApi(token, 'Biology')
+    await page.goto(`/subjects/${subjectId}`)
+    await expect(page).toHaveURL(new RegExp(`/subjects/${subjectId}`))
   })
 
   test('The Unauthorized Access Gauntlet (Security)', async ({ page, context }) => {

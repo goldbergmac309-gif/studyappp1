@@ -5,7 +5,6 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
-import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -39,9 +38,7 @@ export default function Header() {
             <span className="font-medium tracking-tight hidden sm:block">Synapse OS</span>
           </Link>
         </div>
-        <div className="hidden md:block flex-1 max-w-2xl">
-          <Input placeholder="Search (⌘K)" className="w-full" />
-        </div>
+        {/* Global search moved out of header. Decommissioned header search input. */}
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="text-xs h-9">Start Session</Button>
           <Button variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/5 hover:border-primary/90 text-xs h-9">Upgrade</Button>

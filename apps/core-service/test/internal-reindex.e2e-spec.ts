@@ -5,8 +5,19 @@ import request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import cuid from 'cuid';
+import { createHmac, createHash } from 'crypto';
 
 const INTERNAL_KEY = 'dev-internal-key';
+const INTERNAL_SECRET = 'dev-internal-secret';
+
+function sign(method: string, path: string, body: unknown, secret: string) {
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const bodyStr = JSON.stringify(body ?? {});
+  const bodySha = createHash('sha256').update(bodyStr).digest('hex');
+  const toSign = `${ts}.${method.toUpperCase()}.${path}.${bodySha}`;
+  const sig = createHmac('sha256', secret).update(toSign).digest('hex');
+  return { ts, bodySha, sig, bodyStr } as const;
+}
 
 describe('Internal Reindex (e2e)', () => {
   let app: INestApplication;
@@ -14,6 +25,7 @@ describe('Internal Reindex (e2e)', () => {
 
   beforeEach(async () => {
     process.env.INTERNAL_API_KEY = INTERNAL_KEY;
+    process.env.INTERNAL_API_SECRET = INTERNAL_SECRET;
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -85,21 +97,29 @@ describe('Internal Reindex (e2e)', () => {
       .get(`/internal/subjects/${subjectId}/documents`)
       .expect(401);
 
-    // 401 wrong
+    // 401 wrong signature
     await request(app.getHttpServer())
       .get(`/internal/subjects/${subjectId}/documents`)
-      .set('X-Internal-API-Key', 'wrong')
+      .set('X-Timestamp', '0')
+      .set('X-Body-SHA256', 'deadbeef')
+      .set('X-Signature', 'badsignature')
       .expect(401);
 
     // 200 ok
-    const ok = await request(app.getHttpServer())
-      .get(`/internal/subjects/${subjectId}/documents`)
-      .set('X-Internal-API-Key', INTERNAL_KEY)
-      .expect(200);
-    expect(Array.isArray(ok.body)).toBe(true);
-    expect(
-      ok.body.find((d: any) => d.id === docId && typeof d.s3Key === 'string'),
-    ).toBeTruthy();
+    {
+      const path = `/internal/subjects/${subjectId}/documents`;
+      const { ts, bodySha, sig } = sign('GET', path, {}, INTERNAL_SECRET);
+      const ok = await request(app.getHttpServer())
+        .get(path)
+        .set('X-Timestamp', ts)
+        .set('X-Body-SHA256', bodySha)
+        .set('X-Signature', sig)
+        .expect(200);
+      expect(Array.isArray(ok.body)).toBe(true);
+      expect(
+        ok.body.find((d: any) => d.id === docId && typeof d.s3Key === 'string'),
+      ).toBeTruthy();
+    }
   });
 
   it('PUT /internal/reindex/:subjectId/chunks upserts chunks+embeddings idempotently and validates payload', async () => {
@@ -129,7 +149,9 @@ describe('Internal Reindex (e2e)', () => {
     // 401 wrong
     await request(app.getHttpServer())
       .put(`/internal/reindex/${subjectId}/chunks`)
-      .set('X-Internal-API-Key', 'wrong')
+      .set('X-Timestamp', '0')
+      .set('X-Body-SHA256', 'deadbeef')
+      .set('X-Signature', 'badsignature')
       .send({})
       .expect(401);
 
@@ -141,11 +163,22 @@ describe('Internal Reindex (e2e)', () => {
       dim: 384,
       chunks: [{ index: 0, text: 'Hello', embedding: Array(384).fill(0.1) }],
     };
-    await request(app.getHttpServer())
-      .put(`/internal/reindex/${otherSubjectId}/chunks`)
-      .set('X-Internal-API-Key', INTERNAL_KEY)
-      .send(bodyBadDoc)
-      .expect(404);
+    {
+      const path = `/internal/reindex/${otherSubjectId}/chunks`;
+      const { ts, bodySha, sig } = sign(
+        'PUT',
+        path,
+        bodyBadDoc,
+        INTERNAL_SECRET,
+      );
+      await request(app.getHttpServer())
+        .put(path)
+        .set('X-Timestamp', ts)
+        .set('X-Body-SHA256', bodySha)
+        .set('X-Signature', sig)
+        .send(bodyBadDoc)
+        .expect(404);
+    }
 
     // 400 dim mismatch
     const badDim = {
@@ -154,11 +187,17 @@ describe('Internal Reindex (e2e)', () => {
       dim: 384,
       chunks: [{ index: 0, text: 'Hello', embedding: Array(10).fill(0.1) }],
     };
-    await request(app.getHttpServer())
-      .put(`/internal/reindex/${subjectId}/chunks`)
-      .set('X-Internal-API-Key', INTERNAL_KEY)
-      .send(badDim)
-      .expect(400);
+    {
+      const path = `/internal/reindex/${subjectId}/chunks`;
+      const { ts, bodySha, sig } = sign('PUT', path, badDim, INTERNAL_SECRET);
+      await request(app.getHttpServer())
+        .put(path)
+        .set('X-Timestamp', ts)
+        .set('X-Body-SHA256', bodySha)
+        .set('X-Signature', sig)
+        .send(badDim)
+        .expect(400);
+    }
 
     // 200 valid upsert then idempotent re-upsert
     const makeBatch = (scale: number) => ({
@@ -178,18 +217,27 @@ describe('Internal Reindex (e2e)', () => {
       ],
     });
 
+    const pathOk = `/internal/reindex/${subjectId}/chunks`;
+    const b1 = makeBatch(1);
+    const s1 = sign('PUT', pathOk, b1, INTERNAL_SECRET);
     const first = await request(app.getHttpServer())
-      .put(`/internal/reindex/${subjectId}/chunks`)
-      .set('X-Internal-API-Key', INTERNAL_KEY)
-      .send(makeBatch(1))
+      .put(pathOk)
+      .set('X-Timestamp', s1.ts)
+      .set('X-Body-SHA256', s1.bodySha)
+      .set('X-Signature', s1.sig)
+      .send(b1)
       .expect(200);
     expect(first.body.upsertedChunks).toBe(3);
     expect(first.body.upsertedEmbeddings).toBe(3);
 
+    const b2 = makeBatch(2);
+    const s2 = sign('PUT', pathOk, b2, INTERNAL_SECRET);
     const second = await request(app.getHttpServer())
-      .put(`/internal/reindex/${subjectId}/chunks`)
-      .set('X-Internal-API-Key', INTERNAL_KEY)
-      .send(makeBatch(2)) // different embeddings/texts; should update, not duplicate
+      .put(pathOk)
+      .set('X-Timestamp', s2.ts)
+      .set('X-Body-SHA256', s2.bodySha)
+      .set('X-Signature', s2.sig)
+      .send(b2) // different embeddings/texts; should update, not duplicate
       .expect(200);
     expect(second.body.upsertedChunks).toBe(3);
     expect(second.body.upsertedEmbeddings).toBe(3);

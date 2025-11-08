@@ -8,15 +8,24 @@ import { PrismaHealthIndicator } from './indicators/prisma.indicator';
 import { QueueHealthIndicator } from './indicators/queue.indicator';
 import { S3HealthIndicator } from './indicators/s3.indicator';
 import { LivenessHealthIndicator } from './indicators/liveness.indicator';
+import { ClamavHealthIndicator } from './indicators/clamav.indicator';
+import { DocumentsModule } from '../documents/documents.module';
 
 @Module({
-  imports: [TerminusModule, PrismaModule, QueueModule, S3Module],
+  imports: [
+    TerminusModule,
+    PrismaModule,
+    QueueModule,
+    S3Module,
+    DocumentsModule,
+  ],
   controllers: [HealthController],
   providers: [
     PrismaHealthIndicator,
     QueueHealthIndicator,
     S3HealthIndicator,
     LivenessHealthIndicator,
+    ClamavHealthIndicator,
   ],
 })
 export class HealthModule {}

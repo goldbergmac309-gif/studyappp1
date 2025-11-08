@@ -1,9 +1,22 @@
+"use client"
+
 import Link from "next/link"
-import { Suspense } from "react"
+import { Suspense, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { SignupForm } from "@/components/auth/SignupForm"
+import { useAuth } from "@/hooks/use-auth"
+import { useRouter } from "next/navigation"
 
 export default function SignupPage() {
+  const { token } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (token) {
+      router.replace("/dashboard")
+    }
+  }, [token, router])
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[hsl(210_40%_96%)]/40">
       <Card className="w-full max-w-md rounded-xl shadow-lift">

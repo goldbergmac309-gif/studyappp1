@@ -17,7 +17,20 @@ export class S3HealthIndicator extends HealthIndicator {
           reason: 'not configured',
         });
       }
-      return this.getStatus(key, ok);
+      if (ok === true) return this.getStatus(key, true);
+
+      // If bucket head check failed, attempt to create implicitly by putting a sentinel object (dev/minio)
+      try {
+        await this.s3.putObject(
+          '.health/sentinel.txt',
+          Buffer.from('ok'),
+          'text/plain',
+        );
+        const recheck = await this.s3.checkHealth();
+        return this.getStatus(key, Boolean(recheck));
+      } catch (inner) {
+        return this.getStatus(key, false, { error: (inner as Error).message });
+      }
     } catch (e) {
       return this.getStatus(key, false, { error: (e as Error).message });
     }

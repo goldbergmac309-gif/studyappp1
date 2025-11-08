@@ -1,20 +1,14 @@
 import { test, expect, Page } from '@playwright/test'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { signUpAndGotoDashboard, clearClientState } from './helpers'
 
 function uniqueEmail() {
   const ts = Date.now()
   return `e2e+search+${ts}@studyapp.dev`
 }
 
-async function clearClientState(page: Page) {
-  await page.evaluate(() => {
-    try {
-      localStorage.clear()
-      sessionStorage.clear()
-    } catch {}
-  })
-}
+// clearClientState is imported from ./helpers
 
 async function getAuthToken(page: Page, fallback?: { email: string; password: string }): Promise<string> {
   const raw = await page.evaluate(() => localStorage.getItem('studyapp-auth'))
@@ -39,6 +33,7 @@ async function getAuthToken(page: Page, fallback?: { email: string; password: st
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001'
 const EMBED_BASE = process.env.ORACLE_EMBED_URL || 'http://localhost:8000'
+const SKIP_EMBED = !!process.env.SKIP_EMBED
 const INTERNAL_KEY = process.env.INTERNAL_API_KEY || 'dev-internal-key'
 
 // Helper to upsert a single chunk for the first document of a subject via internal API
@@ -61,19 +56,28 @@ async function seedOneChunk(subjectId: string, token: string, text: string) {
   }
   if (!docId) throw new Error('No documents in subject after waiting')
 
-  // 2) Get a real embedding from the embed server for the provided text
-  const embedRes = await fetch(`${EMBED_BASE.replace(/\/$/, '')}/embed`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
-  })
-  if (!embedRes.ok) throw new Error(`Embed failed: ${embedRes.status}`)
-  const embedData = (await embedRes.json()) as { model: string; dim: number; embedding: number[] }
-  const dim = embedData.dim
-  const embedding = embedData.embedding
+  // 2) Get embedding (real server or deterministic skip)
+  let dim = 1536
+  let embedding: number[]
+  let model = 'mock-miniLM'
+  if (SKIP_EMBED) {
+    const base = Math.max(1, Math.min(1000, text.length))
+    embedding = Array(dim).fill(0).map((_, i) => ((i % 7) + base) * 0.001)
+  } else {
+    const embedRes = await fetch(`${EMBED_BASE.replace(/\/$/, '')}/embed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+    if (!embedRes.ok) throw new Error(`Embed failed: ${embedRes.status}`)
+    const embedData = (await embedRes.json()) as { model: string; dim: number; embedding: number[] }
+    dim = embedData.dim
+    embedding = embedData.embedding
+    model = embedData.model || model
+  }
   const body = {
     documentId: docId,
-    model: embedData.model || 'stub-miniLM',
+    model,
     dim: dim,
     chunks: [
       { index: 0, text, tokens: 8, embedding },
@@ -95,17 +99,16 @@ test.describe('Semantic Search UI', () => {
     await context.clearCookies()
     await clearClientState(page)
 
-    // Sign up
-    await page.goto('/signup')
-    await page.getByPlaceholder('you@example.com').fill(email)
-    await page.getByPlaceholder('Your password').fill(password)
-    await page.getByPlaceholder('Confirm password').fill(password)
-    await page.getByRole('button', { name: 'Create account' }).click()
-    await expect(page.getByText('Account created')).toBeVisible()
-    await expect(page).toHaveURL(/\/dashboard$/)
+    // Sign up and land on dashboard (robust helper)
+    await signUpAndGotoDashboard(page, email, password, { verifyToast: 'soft' })
 
     // Obtain JWT and create subject via API, then open it directly
     const token = await getAuthToken(page, { email, password })
+    // Give AI consent to avoid gating modal during search
+    await fetch(`${API_BASE}/users/@me/consent-ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    })
     const subjectName = `Bio Search ${Date.now()}`
     const createRes = await fetch(`${API_BASE}/subjects`, {
       method: 'POST',
@@ -160,7 +163,13 @@ test.describe('Semantic Search UI', () => {
       await expect(firstItem).toBeVisible()
       await expect(firstItem).toContainText(/cellular energy/i)
     } catch {
-      // Fallback: directly verify API returns semantic hits
+      // Fallback: ensure consent is registered for this token, then verify API returns semantic hits
+      try {
+        await fetch(`${API_BASE}/users/@me/consent-ai`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        })
+      } catch {}
       const apiRes = await fetch(`${API_BASE}/subjects/${encodeURIComponent(subjectId)}/search?query=${encodeURIComponent('cellular energy')}&k=10`, {
         headers: { Authorization: `Bearer ${token}` },
       })

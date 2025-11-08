@@ -6,12 +6,14 @@ import { StatusBadge } from "@/components/status-badge"
 import { FileText } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 
 export type DocumentListItemProps = {
   doc: Document
   isActive: boolean
   onClick: () => void
   onReprocess?: (id: string) => void
+  onView?: (id: string) => void
 }
 
 function formatRelative(iso: string): string {
@@ -40,11 +42,40 @@ function formatRelative(iso: string): string {
   }
 }
 
-export function DocumentListItem({ doc, isActive, onClick, onReprocess }: DocumentListItemProps) {
+export function DocumentListItem({ doc, isActive, onClick, onReprocess, onView }: DocumentListItemProps) {
+  const prettyType = React.useMemo(() => {
+    const rt = (doc as any).resourceType as string | undefined
+    if (!rt) return null
+    const label = rt.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+    return label
+  }, [doc])
+  const badgeVariant = React.useMemo<"default"|"secondary"|"destructive"|"outline">(() => {
+    const rt = ((doc as any).resourceType as string | undefined) || 'OTHER'
+    switch (rt) {
+      case 'EXAM':
+        return 'default'
+      case 'SYLLABUS':
+      case 'PRACTICE_SET':
+        return 'secondary'
+      case 'NOTES':
+      case 'LECTURE_NOTES':
+      case 'TEXTBOOK':
+        return 'outline'
+      default:
+        return 'outline'
+    }
+  }, [doc])
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
       className={cn(
         "flex w-full items-center justify-between rounded-xl border p-3 text-left transition-all bg-card",
         isActive ? "border-ring ring-2 ring-ring/30 shadow-subtle" : "hover:bg-muted/40 hover:shadow-subtle"
@@ -65,7 +96,23 @@ export function DocumentListItem({ doc, isActive, onClick, onReprocess }: Docume
         </div>
       </div>
       <div className="flex items-center gap-2">
+        {prettyType && (
+          <Badge variant={badgeVariant} aria-label={`Resource type: ${prettyType}`}>{prettyType}</Badge>
+        )}
         <StatusBadge status={doc.status} />
+        {onView && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={(e) => {
+              e.stopPropagation()
+              onView(doc.id)
+            }}
+          >
+            View
+          </Button>
+        )}
         {doc.status === "FAILED" && onReprocess && (
           <Button
             type="button"
@@ -80,7 +127,7 @@ export function DocumentListItem({ doc, isActive, onClick, onReprocess }: Docume
           </Button>
         )}
       </div>
-    </button>
+    </div>
   )
 }
 

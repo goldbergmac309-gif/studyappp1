@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 
 import api from "@/lib/api"
+import type { LoginResponse } from "@studyapp/shared-types"
 import { useAuth } from "@/hooks/use-auth"
 
 import { Button } from "@/components/ui/button"
@@ -55,17 +56,17 @@ export function SignupForm() {
     setError(null)
     try {
       const { email, password } = values
-      const res = await api.post("/auth/signup", { email, password })
-      const { accessToken, token, user } = res.data as {
-        accessToken?: string
-        token?: string
-        user: { id: string; email: string }
-      }
-      const resolvedToken = accessToken ?? token
+      const res = await api.post<LoginResponse>("/auth/signup", { email, password })
+      const { accessToken, user } = res.data
+      const resolvedToken = accessToken
       if (!resolvedToken) {
         throw new Error("Signup response missing access token")
       }
-      actions.login(resolvedToken, user)
+      actions.login(resolvedToken, {
+        id: user.id,
+        email: user.email,
+        hasConsentedToAi: !!user.hasConsentedToAi,
+      })
       toast.success("Account created", { description: user.email })
       const next = search?.get("next")
       router.replace(next && next.startsWith("/") ? next : "/dashboard")

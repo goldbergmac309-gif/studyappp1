@@ -5,6 +5,7 @@ import request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { EmbeddingService } from '../src/subjects/embedding.service';
+import { createHmac, createHash } from 'crypto';
 
 class FakeEmbeddingService {
   embedText(text: string) {
@@ -22,6 +23,7 @@ describe('Semantic Search (e2e)', () => {
 
   beforeEach(async () => {
     process.env.INTERNAL_API_KEY = 'test-internal-key';
+    process.env.INTERNAL_API_SECRET = 'test-internal-secret';
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
@@ -71,6 +73,12 @@ describe('Semantic Search (e2e)', () => {
       .expect(201);
     const subjectId: string = created.body.id;
 
+    // 2b) Consent to AI features
+    await request(app.getHttpServer())
+      .post('/users/@me/consent-ai')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
     // 3) Create a document row directly
     const doc = await prisma.document.create({
       data: {
@@ -83,7 +91,7 @@ describe('Semantic Search (e2e)', () => {
     });
 
     // 4) Insert chunk+embedding via internal reindex endpoint (guarded)
-    const apiKey = 'test-internal-key';
+    const secret = 'test-internal-secret';
 
     const chunk = {
       index: 0,
@@ -92,16 +100,30 @@ describe('Semantic Search (e2e)', () => {
       embedding: Array.from({ length: 1536 }, (_, i) => (i % 13) / 100), // matches FakeEmbeddingService for a given length
     };
 
-    await request(app.getHttpServer())
-      .put(`/internal/reindex/${subjectId}/chunks`)
-      .set('X-Internal-API-Key', apiKey)
-      .send({
+    {
+      const path = `/internal/reindex/${subjectId}/chunks`;
+      const body = {
         documentId: doc.id,
         model: 'stub-miniLM',
         dim: 1536,
         chunks: [chunk],
-      })
-      .expect(200);
+      };
+      const ts = Math.floor(Date.now() / 1000).toString();
+      const bodySha = createHash('sha256')
+        .update(JSON.stringify(body))
+        .digest('hex');
+      const sig = createHmac('sha256', secret)
+        .update(`${ts}.PUT.${path}.${bodySha}`)
+        .digest('hex');
+
+      await request(app.getHttpServer())
+        .put(path)
+        .set('X-Timestamp', ts)
+        .set('X-Body-SHA256', bodySha)
+        .set('X-Signature', sig)
+        .send(body)
+        .expect(200);
+    }
 
     // 5) Perform search
     const res = await request(app.getHttpServer())

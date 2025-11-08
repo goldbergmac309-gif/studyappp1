@@ -36,10 +36,12 @@ class Settings:
     RABBITMQ_URL: str
     RABBITMQ_QUEUE_NAME: str
     RABBITMQ_REINDEX_QUEUE_NAME: str
+    RABBITMQ_INSIGHTS_QUEUE_NAME: str
 
     # Core-service callback
     CORE_SERVICE_URL: str
     INTERNAL_API_KEY: str
+    INTERNAL_API_SECRET: str
 
     # S3
     AWS_REGION: str | None
@@ -49,8 +51,23 @@ class Settings:
 
     # Engine metadata
     ENGINE_VERSION: str
+    ENGINE_PROVIDER: str
     ENGINE_MODEL_NAME: str
     ENGINE_DIM: int
+
+    # LLM/Embedding provider safety & keys
+    OPENAI_API_KEY: str | None
+    AI_CONSENT: bool
+    LLM_PROVIDER: str
+
+    # Feature flags
+    ENABLE_META_CALLBACK: bool
+    SUPPRESS_TEMPLATE_WARNINGS: bool
+
+    # Diff tuning
+    DIFF_MASTERY_DELTA_THRESHOLD: float
+    DIFF_FUZZY_MATCH_ENABLED: bool
+    DIFF_FUZZY_JACCARD_MIN: float
 
     # Logging & timeouts
     LOG_LEVEL: str
@@ -91,15 +108,26 @@ def get_settings() -> Settings:
         RABBITMQ_URL=os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672//"),
         RABBITMQ_QUEUE_NAME=os.getenv("RABBITMQ_QUEUE_NAME", "document_processing_jobs"),
         RABBITMQ_REINDEX_QUEUE_NAME=os.getenv("RABBITMQ_REINDEX_QUEUE_NAME", "v2_reindexing_jobs"),
+        RABBITMQ_INSIGHTS_QUEUE_NAME=os.getenv("RABBITMQ_INSIGHTS_QUEUE_NAME", "insights_session_jobs"),
         CORE_SERVICE_URL=os.getenv("CORE_SERVICE_URL", "http://localhost:3000"),
         INTERNAL_API_KEY=os.getenv("INTERNAL_API_KEY", ""),
+        INTERNAL_API_SECRET=os.getenv("INTERNAL_API_SECRET", ""),
         AWS_REGION=os.getenv("AWS_REGION"),
         S3_BUCKET=os.getenv("S3_BUCKET"),
         AWS_S3_ENDPOINT=_endpoint,
         AWS_S3_FORCE_PATH_STYLE=_to_bool(os.getenv("AWS_S3_FORCE_PATH_STYLE"), False),
         ENGINE_VERSION=os.getenv("ENGINE_VERSION", "oracle-v1"),
+        ENGINE_PROVIDER=os.getenv("ENGINE_PROVIDER", "stub"),
         ENGINE_MODEL_NAME=os.getenv("ENGINE_MODEL_NAME", "stub-miniLM"),
         ENGINE_DIM=_to_int(os.getenv("ENGINE_DIM"), 1536),
+        OPENAI_API_KEY=os.getenv("OPENAI_API_KEY"),
+        AI_CONSENT=_to_bool(os.getenv("AI_CONSENT"), False),
+        LLM_PROVIDER=os.getenv("LLM_PROVIDER", "none"),
+        ENABLE_META_CALLBACK=_to_bool(os.getenv("ENABLE_META_CALLBACK"), False),
+        SUPPRESS_TEMPLATE_WARNINGS=_to_bool(os.getenv("SUPPRESS_TEMPLATE_WARNINGS"), False),
+        DIFF_MASTERY_DELTA_THRESHOLD=_to_float(os.getenv("DIFF_MASTERY_DELTA_THRESHOLD"), 0.05),
+        DIFF_FUZZY_MATCH_ENABLED=_to_bool(os.getenv("DIFF_FUZZY_MATCH_ENABLED"), True),
+        DIFF_FUZZY_JACCARD_MIN=_to_float(os.getenv("DIFF_FUZZY_JACCARD_MIN"), 0.45),
         LOG_LEVEL=os.getenv("LOG_LEVEL", "INFO").upper(),
         HTTP_CONNECT_TIMEOUT=_to_float(os.getenv("HTTP_CONNECT_TIMEOUT"), 5.0),
         HTTP_READ_TIMEOUT=_to_float(os.getenv("HTTP_READ_TIMEOUT"), 30.0),

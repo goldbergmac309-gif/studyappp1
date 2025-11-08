@@ -16,6 +16,7 @@ export type DocumentsListProps = {
   error?: string
   onRetry?: () => void
   onReprocess?: (id: string) => void
+  onView?: (id: string) => void
 }
 
 export default function DocumentsList({
@@ -26,6 +27,7 @@ export default function DocumentsList({
   error,
   onRetry,
   onReprocess,
+  onView,
 }: DocumentsListProps) {
   if (error) {
     return (
@@ -79,6 +81,7 @@ export default function DocumentsList({
           isActive={doc.id === selectedId}
           onClick={() => onSelect(doc.id)}
           onReprocess={onReprocess}
+          onView={onView}
         />
       ))}
     </div>

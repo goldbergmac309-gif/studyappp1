@@ -7,6 +7,7 @@ import configuration from './configuration';
     NestConfigModule.forRoot({
       load: [configuration],
       isGlobal: true,
+      envFilePath: ['apps/core-service/.env', '.env'],
     }),
   ],
 })

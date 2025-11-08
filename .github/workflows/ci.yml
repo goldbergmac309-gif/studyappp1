@@ -15,20 +15,48 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Run trufflehog filesystem scan (Docker)
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/repo -w /repo trufflesecurity/trufflehog:latest \
+            filesystem --only-verified --fail /repo
+
+  trivy-scan:
+    needs: [secret-scan]
+    name: Container Scan (Trivy)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build core-service image
+        run: docker build -t studyapp/core-service:ci -f apps/core-service/Dockerfile .
+      - name: Build oracle-service image
+        run: docker build -t studyapp/oracle-service:ci -f apps/oracle-service/Dockerfile .
+      - name: Trivy scan core-service image
+        uses: aquasecurity/trivy-action@0.24.0
         with:
-          python-version: "3.12"
-      - name: Install trufflehog
-        run: |
-          python -m pip install --upgrade pip
-          pip install trufflehog
-      - name: Run trufflehog filesystem scan
-        run: |
-          trufflehog filesystem --fail --no-update .
+          image-ref: 'studyapp/core-service:ci'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+      - name: Trivy scan oracle-service image
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: 'studyapp/oracle-service:ci'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
 
   lint-test:
-    needs: [secret-scan]
+    needs: [secret-scan, trivy-scan]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -56,7 +84,7 @@ jobs:
         run: python -m pytest -q
 
   e2e-client-mock:
-    needs: [secret-scan]
+    needs: [secret-scan, trivy-scan]
     name: Client E2E (Mock Core)
     runs-on: ubuntu-latest
     steps:
@@ -71,7 +99,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10.15.1
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -79,12 +107,13 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter @studyapp/client exec playwright install --with-deps
 
-      - name: Run Notes E2E against mock core
+      - name: Run Client E2E against mock core (full suite)
         env:
           MOCK_CORE: '1'
           CORE_PORT: '3301'
           NEXT_PUBLIC_API_BASE_URL: 'http://localhost:3301'
-        run: pnpm --filter @studyapp/client exec playwright test e2e/notes-editor.spec.ts --reporter=line
+          SKIP_EMBED: '1'
+        run: pnpm --filter @studyapp/client exec playwright test --reporter=line
 
       - name: Upload Playwright artifacts
         if: always()
@@ -96,7 +125,7 @@ jobs:
             apps/client/playwright-report
 
   core-e2e-pgvector:
-    needs: [secret-scan]
+    needs: [secret-scan, trivy-scan]
     name: Core-Service E2E (pgvector)
     runs-on: ubuntu-latest
     services:
@@ -125,7 +154,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10.15.1
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -143,6 +172,79 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: core-service-jest-artifacts
+          path: |
+            apps/core-service/coverage
+            apps/core-service/test-results
+
+  core-e2e-clamav:
+    needs: [secret-scan, trivy-scan]
+    name: Core-Service E2E (ClamAV EICAR)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: studyapp_dev
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      clamav:
+        image: clamav/clamav:stable
+        ports:
+          - 3310:3310
+        options: >-
+          --health-cmd "clamdscan --version || exit 1"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare Prisma (generate + migrate)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studyapp_dev?schema=public
+        run: |
+          pnpm --filter core-service exec prisma generate
+          pnpm --filter core-service exec prisma migrate deploy
+
+      - name: Run ClamAV EICAR integration spec
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studyapp_dev?schema=public
+          JWT_SECRET: ci-jwt
+          INTERNAL_API_KEY: ci-internal
+          NODE_ENV: test
+          CLAMAV_ENABLED: 'true'
+          CLAMAV_HOST: 'clamav'
+          CLAMAV_PORT: '3310'
+          SKIP_MALWARE_SCAN: 'false'
+        run: |
+          pnpm --filter core-service exec jest --config ./apps/core-service/test/jest-e2e.json --runInBand apps/core-service/test/malware.clamav.e2e-spec.ts
+
+      - name: Upload EICAR test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-service-jest-artifacts-clamav
           path: |
             apps/core-service/coverage
             apps/core-service/test-results

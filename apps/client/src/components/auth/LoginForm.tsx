@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 
 import api from "@/lib/api"
+import type { LoginResponse } from "@studyapp/shared-types"
 import { useAuth } from "@/hooks/use-auth"
 
 import { Button } from "@/components/ui/button"
@@ -47,17 +48,17 @@ export function LoginForm() {
   const onSubmit = async (values: FormValues) => {
     setError(null)
     try {
-      const res = await api.post("/auth/login", values)
-      const { accessToken, token, user } = res.data as {
-        accessToken?: string
-        token?: string
-        user: { id: string; email: string }
-      }
-      const resolvedToken = accessToken ?? token
+      const res = await api.post<LoginResponse>("/auth/login", values)
+      const { accessToken, user } = res.data
+      const resolvedToken = accessToken
       if (!resolvedToken) {
         throw new Error("Login response missing access token")
       }
-      actions.login(resolvedToken, user)
+      actions.login(resolvedToken, {
+        id: user.id,
+        email: user.email,
+        hasConsentedToAi: !!user.hasConsentedToAi,
+      })
       toast.success("Welcome back!", { description: user.email })
       const next = search?.get("next")
       router.replace(next && next.startsWith("/") ? next : "/dashboard")

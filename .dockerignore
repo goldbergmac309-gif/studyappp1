@@ -1,0 +1,36 @@
+# VCS
+.git
+.gitignore
+
+# Node
+node_modules
+**/node_modules
+npm-debug.log*
+yarn-error.log*
+
+# Build artifacts
+.dist
+**/dist
+build
+coverage
+.next
+
+# Python virtualenvs and caches
+.venv
+.venv-oracle
+**/.venv
+**/__pycache__
+**/.ruff_cache
+**/.pytest_cache
+**/.mypy_cache
+
+# Large or local-only data
+**/*.log
+**/*.lockb
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker
+**/.dockerignore

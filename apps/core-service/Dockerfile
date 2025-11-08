@@ -9,11 +9,16 @@ WORKDIR /app
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY apps/core-service/package.json apps/core-service/
 COPY packages/shared-types/package.json packages/shared-types/
-RUN pnpm -w install --frozen-lockfile
+RUN pnpm -w -r install --frozen-lockfile
 
-# Build
-COPY . .
-RUN pnpm -F @studyapp/shared-types build && pnpm -F core-service build
+# Build only the required workspaces to avoid copying the entire repo (prevents .venv bloat)
+COPY packages/shared-types/ packages/shared-types/
+COPY apps/core-service/ apps/core-service/
+# Relink and ensure core-service workspace dependencies (including devDeps) are installed before build
+RUN pnpm -w -r install --frozen-lockfile \
+  && pnpm --filter core-service install --frozen-lockfile \
+  && pnpm --filter core-service exec prisma generate --schema=prisma/schema.prisma \
+  && pnpm --filter core-service exec tsc -p tsconfig.build.json
 
 # Create a production-ready deploy directory with pruned node_modules for core-service
 RUN pnpm deploy --filter core-service --prod --legacy /app/deploy \

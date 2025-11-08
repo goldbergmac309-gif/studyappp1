@@ -114,9 +114,10 @@ export class S3Service {
     }
     const cmd = new GetObjectCommand({ Bucket: this.bucket, Key: key });
     // Cast to any to avoid type mismatches between @aws-sdk subpackages in monorepo
-    const url = (await getSignedUrl(this.client as any, cmd as any, {
+
+    const url = await getSignedUrl(this.client as any, cmd as any, {
       expiresIn: expiresInSeconds,
-    })) as string;
+    });
     return url;
   }
 }

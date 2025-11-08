@@ -141,12 +141,43 @@ export function streamInsightSession(
 
 // Insight Sessions (Phase C)
 export type InsightSessionStatus = 'PENDING' | 'READY' | 'FAILED'
+
+export interface InsightSessionResult {
+  progress?: {
+    stage?: string
+    ratio?: number
+    updatedAt?: string
+  }
+  summary?: {
+    docCount?: number
+    chunkCount?: number
+    questionCount?: number
+  }
+  topics?: Array<{ label: string; weight: number }>
+  conceptGraph?: Record<string, unknown>
+  insight?: {
+    topicHighlights?: Array<{ label: string; weight?: number; terms?: Array<{ term: string; score: number }> }>
+    conceptOverview?: Array<{ label: string; mastery?: number; difficulty?: number }>
+    riskConcepts?: Array<{ label: string; mastery?: number }>
+    studyPlan?: Array<{ title: string; focus?: string; recommendedActions?: string[] }>
+    questionFamilies?: Array<{ label: string; synopsis?: string; frequency?: number }>
+    [key: string]: unknown
+  }
+  forecast?: {
+    archetype?: string
+    nextExamConfidence?: number
+    probabilities?: Array<{ label: string; value: number }>
+  }
+  studyPlanNarrative?: string
+  [key: string]: unknown
+}
+
 export interface InsightSessionDto {
   id: string
   subjectId: string
   status: InsightSessionStatus
   documentIds?: string[]
-  result?: Record<string, unknown>
+  result?: InsightSessionResult | null
   createdAt?: string
   updatedAt?: string
 }
@@ -163,6 +194,29 @@ export async function createInsightSession(
       { signal: options.signal },
     )
     return res.data
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      if ((err as AxiosError).code === 'ERR_CANCELED') throw err
+      throw new Error(extractErrorMessage(err))
+    }
+    throw err
+  }
+}
+
+// API: GET /documents/:id/url
+// Returns a short-lived presigned URL string for preview/download
+export async function getDocumentUrl(
+  documentId: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<string> {
+  try {
+    const res = await api.get<{ url: string }>(
+      `/documents/${encodeURIComponent(documentId)}/url`,
+      { signal: options.signal },
+    )
+    const url = res.data?.url
+    if (typeof url === 'string' && url.length > 0) return url
+    throw new Error('Invalid URL response')
   } catch (err) {
     if (axios.isAxiosError(err)) {
       if ((err as AxiosError).code === 'ERR_CANCELED') throw err

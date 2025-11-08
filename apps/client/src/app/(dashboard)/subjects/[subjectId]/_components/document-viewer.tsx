@@ -3,6 +3,8 @@
 import * as React from "react"
 import type { Document } from "@/lib/types"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { getDocumentUrl } from "@/lib/api"
 import { useSubjectStore } from "@/lib/subject-store"
 
 export function DocumentViewer({ doc }: { doc: Document }) {
@@ -10,6 +12,20 @@ export function DocumentViewer({ doc }: { doc: Document }) {
   const resourceType = (doc as any).resourceType as string | undefined
   const insights = useSubjectStore((s) => s.insights)
   const entry = insights[doc.id]
+  const [opening, setOpening] = React.useState(false)
+  const onOpenOriginal = React.useCallback(async () => {
+    try {
+      setOpening(true)
+      const url = await getDocumentUrl(doc.id)
+      if (typeof window !== 'undefined') {
+        window.open(url, '_blank', 'noopener,noreferrer')
+      }
+    } catch (e) {
+      console.error('Failed to open original document', e)
+    } finally {
+      setOpening(false)
+    }
+  }, [doc.id])
   const keywords: Array<{ term: string; score?: number }> = React.useMemo(() => {
     const raw = (entry as any)?.resultPayload?.keywords
     if (Array.isArray(raw)) {
@@ -35,8 +51,15 @@ export function DocumentViewer({ doc }: { doc: Document }) {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="truncate" title={doc.filename}>{doc.filename}</CardTitle>
-          <CardDescription>Automatic structure and metadata</CardDescription>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <CardTitle className="truncate" title={doc.filename}>{doc.filename}</CardTitle>
+              <CardDescription>Automatic structure and metadata</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={onOpenOriginal} disabled={opening}>
+              {opening ? 'Opening…' : 'Open Original'}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {items.length ? (

@@ -1,4 +1,8 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -31,5 +35,33 @@ export class UsersService {
 
   async findOne(email: string) {
     return this.prisma.user.findUnique({ where: { email } });
+  }
+
+  async findByRefreshTokenHash(hash: string) {
+    return this.prisma.user.findFirst({
+      where: { refreshTokenHash: hash },
+    });
+  }
+
+  async setRefreshTokenHash(userId: string, hash: string | null) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { refreshTokenHash: hash ?? null },
+      select: { id: true },
+    });
+  }
+
+  async consentToAi(userId: string) {
+    const exists = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!exists) throw new NotFoundException('User not found');
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { hasConsentedToAi: true },
+      select: { id: true, email: true, hasConsentedToAi: true },
+    });
+    return updated;
   }
 }

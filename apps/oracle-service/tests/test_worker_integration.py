@@ -47,11 +47,15 @@ def test_process_document_end_to_end_with_mocks(monkeypatch):
         s3.create_bucket(Bucket=bucket)
         s3.put_object(Bucket=bucket, Key=key, Body=pdf_bytes)
 
-        # Mock core-service internal callback
+        # Mock core-service internal callbacks
         doc_id = "doc-123"
         url = f"{core_url}/internal/documents/{doc_id}/analysis"
+        url_ctx = f"{core_url}/internal/documents/{doc_id}/context"
+        url_struct = f"{core_url}/internal/documents/{doc_id}/structure"
         with requests_mock.Mocker() as m:
             m.put(url, status_code=200, json={"ok": True})
+            m.get(url_ctx, status_code=200, json={})
+            m.put(url_struct, status_code=200, json={"ok": True})
 
             # --- Act ---
             result = process_document.run(
@@ -64,8 +68,8 @@ def test_process_document_end_to_end_with_mocks(monkeypatch):
 
             # --- Assert HTTP call ---
             assert m.called
-            assert m.call_count == 1
-            req = m.request_history[0]
+            assert any(r.url == url for r in m.request_history)
+            req = next(r for r in m.request_history if r.url == url)
             assert req.method == "PUT"
             assert req.headers.get("X-Internal-API-Key") == api_key
 

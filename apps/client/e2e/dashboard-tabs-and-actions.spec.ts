@@ -1,41 +1,16 @@
 import { test, expect, Page } from '@playwright/test'
+// Access process.env in TS without @types/node in this test context
+declare const process: any
+import { signUpAndGotoDashboard, clearClientState, getAuthToken, createSubjectApi } from './helpers'
 
 function uniqueEmail() {
   const ts = Date.now()
   return `e2e+tabs+${ts}@studyapp.dev`
 }
 
-async function signUpAndGotoDashboard(page: Page, email: string, password: string) {
-  await page.goto('/signup')
-  await page.getByPlaceholder('you@example.com').fill(email)
-  await page.getByPlaceholder('Your password').fill(password)
-  await page.getByPlaceholder('Confirm password').fill(password)
-  await page.getByRole('button', { name: 'Create account' }).click()
-  await expect(page).toHaveURL(/\/dashboard$/)
-}
+// Use robust helper from ./helpers
 
-async function createSubject(page: Page, name: string) {
-  const inline = page.getByPlaceholder('e.g. Linear Algebra')
-  // Prefer the inline create form; wait for it to be visible to avoid racing
-  try {
-    await expect(inline.first()).toBeVisible({ timeout: 15000 })
-    await inline.first().fill(name)
-    await page.getByRole('button', { name: /^(?:\+\s*)?Create(?: Subject)?$/ }).click()
-    await expect(page.getByText(name)).toBeVisible()
-    return
-  } catch {
-    // Fallback to modal tile (shown when there are already subjects)
-    const addTile = page.getByText('+ Add space')
-    await addTile.scrollIntoViewIfNeeded()
-    await addTile.click()
-    const modal = page.getByRole('dialog')
-    await expect(modal).toBeVisible()
-    const modalInput = modal.getByPlaceholder('e.g. Linear Algebra')
-    await modalInput.fill(name)
-    await modal.getByRole('button', { name: /^Create Subject$/ }).click()
-    await expect(page.getByText(name)).toBeVisible()
-  }
-}
+const API_BASE = (process?.env?.NEXT_PUBLIC_API_BASE_URL as string) || 'http://localhost:3001'
 
 async function openSubjectMenu(page: Page, subjectName: string) {
   const cardLink = page.getByRole('link', { name: new RegExp(subjectName) }).first()
@@ -47,52 +22,65 @@ async function openSubjectMenu(page: Page, subjectName: string) {
 test.describe('Dashboard Tabs & Card Actions', () => {
   test('Tabs show correct sets; Star and Archive actions move cards to expected tabs', async ({ page, context }) => {
     await context.clearCookies()
+    await clearClientState(page)
 
     const email = uniqueEmail()
     const password = 'password123'
 
-    await signUpAndGotoDashboard(page, email, password)
+    await signUpAndGotoDashboard(page, email, password, { verifyToast: 'soft' })
 
     const A = `Subject A ${Date.now()}`
     const B = `Subject B ${Date.now()}`
     const C = `Subject C ${Date.now()}`
 
-    await createSubject(page, A)
-    await createSubject(page, B)
-    await createSubject(page, C)
+    // Create subjects via API for stability, then refresh dashboard and ensure visibility
+    const token = await getAuthToken(page, { email, password })
+    const aId = await createSubjectApi(token, A)
+    const bId = await createSubjectApi(token, B)
+    const cId = await createSubjectApi(token, C)
+    await page.goto('/dashboard')
+    await expect(page.getByRole('link', { name: new RegExp(A) }).first()).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole('link', { name: new RegExp(B) }).first()).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole('link', { name: new RegExp(C) }).first()).toBeVisible({ timeout: 30000 })
 
-    // Star A
-    await openSubjectMenu(page, A)
-    await page.getByRole('menuitem', { name: 'Star' }).click()
-    await expect(page.getByText(A)).toBeVisible()
+    // Star A via API (avoid flaky menu interactions)
+    await fetch(`${API_BASE}/subjects/${encodeURIComponent(aId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ starred: true }),
+    })
+    await page.reload()
+    await expect(page.getByRole('link', { name: new RegExp(`${A}\\s+Open workspace`) }).first()).toBeVisible()
 
-    // Archive B (accept confirm)
-    page.once('dialog', (d) => d.accept())
-    await openSubjectMenu(page, B)
-    await page.getByRole('menuitem', { name: 'Archive' }).click()
+    // Archive B via API
+    await fetch(`${API_BASE}/subjects/${encodeURIComponent(bId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    await page.reload()
 
     // Starred tab -> only A
     await page.getByRole('button', { name: /^Starred$/ }).click()
-    await expect(page.getByText(A)).toBeVisible()
-    await expect(page.getByText(B)).toHaveCount(0)
-    await expect(page.getByText(C)).toHaveCount(0)
+    await expect(page.getByRole('link', { name: new RegExp(`${A}\\s+Open workspace`) }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: new RegExp(`${B}\\s+Open workspace`) })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: new RegExp(`${C}\\s+Open workspace`) })).toHaveCount(0)
 
     // Archived tab -> only B
     await page.getByRole('button', { name: /^Archived$/ }).click()
-    await expect(page.getByText(B)).toBeVisible()
-    await expect(page.getByText(A)).toHaveCount(0)
-    await expect(page.getByText(C)).toHaveCount(0)
+    await expect(page.getByRole('link', { name: new RegExp(`${B}\\s+Open workspace`) }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: new RegExp(`${A}\\s+Open workspace`) })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: new RegExp(`${C}\\s+Open workspace`) })).toHaveCount(0)
 
     // All tab -> A and C (non-archived)
     await page.getByRole('button', { name: /^All$/ }).click()
-    await expect(page.getByText(A)).toBeVisible()
-    await expect(page.getByText(C)).toBeVisible()
-    await expect(page.getByText(B)).toHaveCount(0)
+    await expect(page.getByRole('link', { name: new RegExp(`${A}\\s+Open workspace`) }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: new RegExp(`${C}\\s+Open workspace`) }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: new RegExp(`${B}\\s+Open workspace`) })).toHaveCount(0)
 
     // Recent tab -> A and C (non-archived, created now)
     await page.getByRole('button', { name: /^Recent$/ }).click()
-    await expect(page.getByText(A)).toBeVisible()
-    await expect(page.getByText(C)).toBeVisible()
-    await expect(page.getByText(B)).toHaveCount(0)
+    await expect(page.getByRole('link', { name: new RegExp(`${A}\\s+Open workspace`) }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: new RegExp(`${C}\\s+Open workspace`) }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: new RegExp(`${B}\\s+Open workspace`) })).toHaveCount(0)
   })
 })

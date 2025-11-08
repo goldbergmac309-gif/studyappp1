@@ -12,6 +12,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 from app.core.topics import compute_subject_topics
 from config import get_settings
+from utils.internal_api import InternalApi
 
 logger = logging.getLogger(__name__)
 
@@ -20,31 +21,23 @@ def _is_transient_http(resp: Response) -> bool:
     return 500 <= resp.status_code < 600
 
 
-class _Http:
-    def __init__(self, base_url: str, api_key: str, timeouts: tuple[float, float]):
-        self.base_url = base_url.rstrip("/")
-        self.headers = {"X-Internal-API-Key": api_key, "Content-Type": "application/json"}
-        self.timeouts = timeouts
+@retry(
+    retry=retry_if_exception_type((ReqConnectionError, ReqTimeout)),
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=1, min=1, max=30),
+    reraise=True,
+)
+def _api_get(api: InternalApi, path: str) -> Response:
+    return api.get(path)
 
-    @retry(
-        retry=retry_if_exception_type((ReqConnectionError, ReqTimeout)),
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=1, max=30),
-        reraise=True,
-    )
-    def get(self, path: str) -> Response:
-        url = f"{self.base_url}{path}"
-        return requests.get(url, headers=self.headers, timeout=self.timeouts)
-
-    @retry(
-        retry=retry_if_exception_type((ReqConnectionError, ReqTimeout)),
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=1, max=30),
-        reraise=True,
-    )
-    def put(self, path: str, json_body: Dict[str, Any]) -> Response:
-        url = f"{self.base_url}{path}"
-        return requests.put(url, headers=self.headers, data=json.dumps(json_body), timeout=self.timeouts)
+@retry(
+    retry=retry_if_exception_type((ReqConnectionError, ReqTimeout)),
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=1, min=1, max=30),
+    reraise=True,
+)
+def _api_put(api: InternalApi, path: str, json_body: Dict[str, Any]) -> Response:
+    return api.put(path, json_body)
 
 
 @shared_task(name="oracle.aggregate_subject_topics")
@@ -55,11 +48,16 @@ def aggregate_subject_topics(payload: dict[str, Any] | None = None) -> dict[str,
         logger.error("aggregate_subject_topics received invalid payload: %r", payload)
         return {"status": "error", "reason": "invalid payload"}
 
-    http = _Http(settings.CORE_SERVICE_URL, settings.INTERNAL_API_KEY, settings.http_timeouts)
+    api = InternalApi(
+        settings.CORE_SERVICE_URL,
+        settings.INTERNAL_API_SECRET,
+        default_timeout=max(settings.http_timeouts) if isinstance(settings.http_timeouts, (list, tuple)) else 30.0,
+        legacy_api_key=getattr(settings, "INTERNAL_API_KEY", None),
+    )
 
     # 1) Fetch all chunks for subject
     try:
-        resp = http.get(f"/internal/subjects/{subject_id}/chunks")
+        resp = _api_get(api, f"/internal/subjects/{subject_id}/chunks")
     except Exception:
         logger.exception("[Topics] Failed to list chunks (network)")
         raise
@@ -91,7 +89,7 @@ def aggregate_subject_topics(payload: dict[str, Any] | None = None) -> dict[str,
     # 3) Upsert topics to core-service
     try:
         put_payload = {"engineVersion": settings.ENGINE_VERSION, "topics": topics}
-        up = http.put(f"/internal/subjects/{subject_id}/topics", put_payload)
+        up = _api_put(api, f"/internal/subjects/{subject_id}/topics", put_payload)
         if 200 <= up.status_code < 300:
             logger.info("[Topics] Upserted topics subjectId=%s count=%s", subject_id, len(topics))
         else:

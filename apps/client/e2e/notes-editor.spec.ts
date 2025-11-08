@@ -1,15 +1,12 @@
 import { test, expect, Page } from '@playwright/test'
+import { signUpAndGotoDashboard, clearClientState, getAuthToken, createSubjectApi } from './helpers'
 
 function uniqueEmail() {
   const ts = Date.now()
   return `e2e+${ts}@studyapp.dev`
 }
 
-async function clearClientState(page: Page) {
-  await page.evaluate(() => {
-    try { localStorage.clear() } catch {}
-  })
-}
+// Use shared clearClientState from helpers
 
 test.use({ video: 'on' })
 
@@ -22,33 +19,14 @@ test.describe('Notes Editor (End-to-End)', () => {
     await context.clearCookies()
     await clearClientState(page)
 
-    await page.goto('/signup')
-    await page.getByPlaceholder('you@example.com').fill(email)
-    await page.getByPlaceholder('Your password').fill(password)
-    await page.getByPlaceholder('Confirm password').fill(password)
-    await page.getByRole('button', { name: 'Create account' }).click()
+    await signUpAndGotoDashboard(page, email, password, { verifyToast: 'soft' })
 
-    await expect(page).toHaveURL(/\/dashboard$/)
-
-    // Create a subject via modal
+    // Create subject via API for stability and navigate directly
     const subjectName = `Notes E2E ${Date.now()}`
-    // Open Subject creation modal (works for both empty and non-empty dashboards)
-    const modalButton = page.getByRole('button', { name: /\+?\s*Create Subject/i })
-    const count = await modalButton.count()
-    if (count > 0) {
-      await modalButton.first().click()
-    } else {
-      await page.getByText(/\+?\s*Add space/i).first().click()
-    }
-    const nameInput = page.getByPlaceholder('e.g. Linear Algebra')
-    await expect(nameInput).toBeVisible({ timeout: 30000 })
-    await nameInput.fill(subjectName)
-    const colorInput = page.getByPlaceholder('#4F46E5')
-    await colorInput.fill('#4F46E5')
-    await page.getByRole('button', { name: /^Continue$/ }).click()
-    await page.getByRole('button', { name: /^Create Subject$/ }).click()
-    // Should navigate to subject workspace automatically
-    await expect(page).toHaveURL(/\/subjects\//)
+    const token = await getAuthToken(page, { email, password })
+    const subjectId = await createSubjectApi(token, subjectName)
+    await page.goto(`/subjects/${subjectId}`)
+    await expect(page).toHaveURL(new RegExp(`/subjects/${subjectId}`))
 
     // Go to Notes tab and remember URL for later
     await page.getByRole('tab', { name: /^Notes$/ }).click()

@@ -32,7 +32,12 @@ export class DocumentsController {
     @Body('resourceType') resourceType?: string,
   ) {
     const userId = req.user.id;
-    const result = await this.documentsService.upload(userId, subjectId, file, resourceType);
+    const result = await this.documentsService.upload(
+      userId,
+      subjectId,
+      file,
+      resourceType,
+    );
     return result;
   }
 
@@ -56,8 +61,15 @@ export class DocumentsController {
     @Query('forceOcr') forceOcr?: string,
   ) {
     const userId = req.user.id;
-    const force = typeof forceOcr === 'string' && ['1', 'true', 'yes'].includes(forceOcr.toLowerCase());
-    return this.documentsService.reprocess(userId, subjectId, documentId, force);
+    const force =
+      typeof forceOcr === 'string' &&
+      ['1', 'true', 'yes'].includes(forceOcr.toLowerCase());
+    return this.documentsService.reprocess(
+      userId,
+      subjectId,
+      documentId,
+      force,
+    );
   }
 }
 

@@ -6,6 +6,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import request from 'supertest';
+import type { Prisma, ResourceType } from '@prisma/client';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { S3Service } from '../src/s3/s3.service';
@@ -114,7 +115,11 @@ describe('Documents (e2e)', () => {
 
     const app2 = moduleFixture.createNestApplication();
     app2.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
     );
     app2.useGlobalFilters(new GlobalExceptionFilter());
     await app2.init();
@@ -143,11 +148,14 @@ describe('Documents (e2e)', () => {
         .set('Authorization', `Bearer ${token}`)
         .attach('file', big, 'large.bin');
       expect(res.status).toBe(413);
-      expect(res.body).toMatchObject({
-        statusCode: 413,
-        message: expect.any(String),
-        timestamp: expect.any(String),
-      });
+      const body = res.body as unknown as {
+        statusCode: number;
+        message: string;
+        timestamp: string;
+      };
+      expect(body.statusCode).toBe(413);
+      expect(typeof body.message).toBe('string');
+      expect(typeof body.timestamp).toBe('string');
     } finally {
       if (prev === undefined) delete process.env.UPLOAD_MAX_FILE_SIZE_BYTES;
       else process.env.UPLOAD_MAX_FILE_SIZE_BYTES = prev;
@@ -159,7 +167,7 @@ describe('Documents (e2e)', () => {
     const subjectId = await createSubject(token, 'Security');
 
     // Spy on scanner to simulate infected
-    const scanner = app.get(MalwareScannerService);
+    const scanner = app.get<MalwareScannerService>(MalwareScannerService);
     jest
       .spyOn(scanner, 'scan')
       .mockResolvedValueOnce({ clean: false, reason: 'EICAR-Test-File' });
@@ -610,8 +618,11 @@ describe('Documents (e2e)', () => {
         s3Key: `documents/${me!.id}/vision`,
         status: Status.COMPLETED,
         subjectId,
-        resourceType: 'TEXTBOOK' as any,
-        meta: { source: 'scanner', resourceTypeHint: 'TEXTBOOK' } as any,
+        resourceType: 'TEXTBOOK' as unknown as ResourceType,
+        meta: {
+          source: 'scanner',
+          resourceTypeHint: 'TEXTBOOK',
+        } as Prisma.InputJsonValue,
       },
     });
 

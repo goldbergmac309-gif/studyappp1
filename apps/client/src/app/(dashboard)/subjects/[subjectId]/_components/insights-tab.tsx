@@ -14,12 +14,15 @@ import { Button } from "@/components/ui/button"
 import { useDebouncedBool } from "@/lib/hooks/useDebouncedBool"
 import { useRelativeTime } from "@/lib/hooks/useRelativeTime"
 import { getSubjectTopics, createInsightSession, getInsightSession, streamInsightSession } from "@/lib/api"
+import type { InsightSessionDto } from "@/lib/api"
 import type { SubjectTopic } from "@studyapp/shared-types"
 import { reprocessDocument } from "@/lib/api"
 import { useAiConsent } from "@/hooks/useAiConsent"
 import { toast } from "sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { HelpCircle } from "lucide-react"
+
+type SessionResult = InsightSessionDto['result']
 
 export default function InsightsTab() {
   const router = useRouter()
@@ -91,12 +94,24 @@ export default function InsightsTab() {
   // Insight Session state (Phase C)
   const [sessionId, setSessionId] = React.useState<string | null>(null)
   const [sessionStatus, setSessionStatus] = React.useState<'PENDING' | 'READY' | 'FAILED' | null>(null)
-  const [sessionResult, setSessionResult] = React.useState<Record<string, unknown> | null>(null)
+  const [sessionResult, setSessionResult] = React.useState<SessionResult | null>(null)
   const [creatingSession, setCreatingSession] = React.useState(false)
   const [sessionError, setSessionError] = React.useState<string | null>(null)
   const pollTimerRef = React.useRef<number | null>(null)
   const sseUnsubRef = React.useRef<(() => void) | null>(null)
   const { hasConsented, requestConsent } = useAiConsent()
+  const sessionProgress = sessionResult?.progress
+  const sessionInsight = sessionResult?.insight
+  const sessionForecast = sessionResult?.forecast
+  const topicHighlights = Array.isArray(sessionInsight?.topicHighlights) ? sessionInsight.topicHighlights : undefined
+  const fallbackTopics = Array.isArray(sessionResult?.topics) ? sessionResult.topics : undefined
+  const topicShowcase = topicHighlights ?? fallbackTopics ?? []
+  const riskConcepts = Array.isArray(sessionInsight?.riskConcepts) ? sessionInsight.riskConcepts : []
+  const conceptOverview = Array.isArray(sessionInsight?.conceptOverview) ? sessionInsight.conceptOverview : []
+  const questionFamilies = Array.isArray(sessionInsight?.questionFamilies) ? sessionInsight.questionFamilies : []
+  const studyPlanItems = Array.isArray(sessionInsight?.studyPlan) ? sessionInsight.studyPlan : []
+  const studyPlanNarrative = typeof sessionResult?.studyPlanNarrative === 'string' ? sessionResult.studyPlanNarrative : null
+  const sessionSummary = sessionResult?.summary
   const aggregated = React.useMemo(() => {
     if (!multiIds.length) return null
     const chosen = multiIds.filter((id) => !!insights[id])
@@ -163,7 +178,7 @@ export default function InsightsTab() {
         onEvent: (evt) => {
           setSessionStatus(evt.status)
           if (evt.status === 'READY' || evt.status === 'FAILED') {
-            setSessionResult((evt as any).result || null)
+            setSessionResult(evt.result ?? null)
           }
         },
         onError: async () => {
@@ -175,7 +190,7 @@ export default function InsightsTab() {
               setSessionStatus(cur.status)
               if (cur.status === 'READY' || cur.status === 'FAILED') {
                 if (pollTimerRef.current) window.clearInterval(pollTimerRef.current)
-                setSessionResult((cur as any).result || null)
+                setSessionResult(cur.result ?? null)
               }
             } catch (e) {
               if (pollTimerRef.current) window.clearInterval(pollTimerRef.current)
@@ -449,29 +464,143 @@ export default function InsightsTab() {
           )}
 
           {sessionId && (
-            <div className="mt-4 space-y-2 text-sm">
+            <div className="mt-4 space-y-3 text-sm">
               <div>Session ID: <span className="font-mono">{sessionId}</span></div>
               <div>Status: <span className="font-medium">{sessionStatus ?? '—'}</span></div>
-              {sessionResult && (
-                <div className="mt-3">
-                  {typeof (sessionResult as any).studyPlan === 'string' ? (
-                    <>
-                      <div className="font-medium mb-1">Suggested Study Plan</div>
-                      <pre className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-sm">{String((sessionResult as any).studyPlan)}</pre>
-                    </>
-                  ) : null}
-                  {Array.isArray((sessionResult as any).topics) && (
-                    <div className="mt-3">
-                      <div className="font-medium mb-1">Top Topics</div>
-                      <ul className="list-disc pl-5">
-                        {((sessionResult as any).topics as Array<{ label: string; weight: number }>).slice(0, 5).map((t, i) => (
-                          <li key={i}>
-                            <span className="font-medium">{t.label}</span> <span className="text-muted-foreground">(weight {t.weight})</span>
-                          </li>
+              {sessionStatus === 'FAILED' && (
+                <Alert variant="destructive">
+                  <AlertTitle>Generation failed</AlertTitle>
+                  <AlertDescription>Retry the session once the documents finish processing.</AlertDescription>
+                </Alert>
+              )}
+              {sessionProgress && sessionStatus !== 'READY' && sessionStatus !== 'FAILED' && (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{(sessionProgress.stage || 'Processing').replace(/-/g, ' ')}</span>
+                    <span>{Math.round(Math.min(1, Math.max(0, sessionProgress.ratio ?? 0)) * 100)}%</span>
+                  </div>
+                  <div className="mt-1 h-2 w-full rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{ width: `${Math.round(Math.min(1, Math.max(0, sessionProgress.ratio ?? 0)) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              {sessionStatus === 'READY' && sessionResult && (
+                <div className="mt-2 grid gap-4 md:grid-cols-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Session Summary</CardTitle>
+                      <CardDescription>Documents analysed: {sessionSummary?.docCount ?? multiIds.length}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      <div>Chunks processed: <span className="font-medium">{sessionSummary?.chunkCount ?? '—'}</span></div>
+                      <div>Questions detected: <span className="font-medium">{sessionSummary?.questionCount ?? '—'}</span></div>
+                      <div className="pt-2">
+                        <div className="font-medium text-xs uppercase text-muted-foreground">Top Topics</div>
+                        <ul className="mt-1 space-y-1">
+                          {topicShowcase.slice(0, 5).map((topic: any, idx: number) => (
+                            <li key={`${topic?.label || topic?.term || idx}`} className="flex items-center justify-between text-sm">
+                              <span className="font-medium">{topic?.label || topic?.term || `Topic ${idx + 1}`}</span>
+                              <span className="text-muted-foreground text-xs">{(topic?.weight ?? topic?.score ?? 0).toFixed(1)}</span>
+                            </li>
+                          ))}
+                          {!topicShowcase.length && <li className="text-muted-foreground text-xs">No topics yet.</li>}
+                        </ul>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Concept Pressure</CardTitle>
+                      <CardDescription>Lowest mastery areas first</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-sm">
+                      {riskConcepts.length ? (
+                        riskConcepts.slice(0, 4).map((concept, idx) => (
+                          <div key={`${concept.label}-${idx}`} className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2">
+                            <span className="font-medium">{concept.label}</span>
+                            <span className="text-xs text-muted-foreground">{Math.round((concept.mastery ?? 0) * 100)}%</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-muted-foreground">No risk concepts detected.</div>
+                      )}
+                      {conceptOverview.length ? (
+                        <div className="text-xs text-muted-foreground">
+                          Tracking {conceptOverview.length} concepts across this session.
+                        </div>
+                      ) : null}
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Forecast</CardTitle>
+                      <CardDescription>{sessionForecast?.archetype ?? 'Awaiting archetype'}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      <div>Next exam confidence: <span className="font-medium">{Math.round((sessionForecast?.nextExamConfidence ?? 0) * 100)}%</span></div>
+                      <div className="space-y-1">
+                        {(sessionForecast?.probabilities ?? []).slice(0, 4).map((p) => (
+                          <div key={p.label} className="flex items-center justify-between text-xs">
+                            <span>{p.label}</span>
+                            <span className="font-medium">{Math.round((p.value ?? 0) * 100)}%</span>
+                          </div>
                         ))}
-                      </ul>
-                    </div>
-                  )}
+                        {!(sessionForecast?.probabilities?.length) && (
+                          <div className="text-xs text-muted-foreground">Probability breakdown unavailable.</div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Question Families</CardTitle>
+                      <CardDescription>Archetypes spotted across documents</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      {questionFamilies.length ? (
+                        questionFamilies.slice(0, 4).map((fam, idx) => (
+                          <div key={`${fam.label}-${idx}`} className="rounded-md border bg-muted/40 p-2">
+                            <div className="font-medium">{fam.label}</div>
+                            <div className="text-xs text-muted-foreground">{fam.synopsis || 'Recurring pattern detected.'}</div>
+                            <div className="text-xs mt-1 text-muted-foreground">Frequency: {fam.frequency ?? '—'}</div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-muted-foreground">No families detected yet.</div>
+                      )}
+                    </CardContent>
+                  </Card>
+                  <Card className="md:col-span-2">
+                    <CardHeader>
+                      <CardTitle>Focus Plan</CardTitle>
+                      <CardDescription>Actions generated by the insight engine</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4 text-sm">
+                      {studyPlanNarrative ? (
+                        <pre className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-sm">{studyPlanNarrative}</pre>
+                      ) : null}
+                      {studyPlanItems.length ? (
+                        studyPlanItems.map((item, idx) => (
+                          <div key={`${item.title ?? idx}`} className="rounded-md border bg-muted/20 p-3">
+                            <div className="font-medium">{item.title || `Focus ${idx + 1}`}</div>
+                            {item.focus && <div className="text-xs text-muted-foreground mb-1">{item.focus}</div>}
+                            {Array.isArray(item.recommendedActions) && (
+                              <ul className="list-disc pl-4 text-xs text-muted-foreground">
+                                {item.recommendedActions.map((action, actionIdx) => (
+                                  <li key={actionIdx}>{action}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-muted-foreground">Study plan will appear when enough concept data accumulates.</div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
               )}
             </div>

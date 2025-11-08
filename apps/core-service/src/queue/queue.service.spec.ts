@@ -48,7 +48,10 @@ describe('QueueService', () => {
       providers: [
         QueueService,
         // Provide a URL so the service does not no-op and instead throws due to missing channel
-        { provide: ConfigService, useValue: mockConfig('amqp://guest:guest@localhost:5672//') },
+        {
+          provide: ConfigService,
+          useValue: mockConfig('amqp://guest:guest@localhost:5672//'),
+        },
       ],
     }).compile();
 
