@@ -25,7 +25,11 @@ services:
 YAML
 
 echo "[diffs] Restart oracle-worker with tuned env: threshold=$DIFF_MASTERY_DELTA_THRESHOLD fuzzy=$DIFF_FUZZY_MATCH_ENABLED jmin=$DIFF_FUZZY_JACCARD_MIN"
-docker compose -f docker-compose.yml -f docker-compose.local.override.yml -f "$OVR" up -d oracle-worker
+if [ -n "${COMPOSE_EXTRA:-}" ]; then
+  docker compose -f docker-compose.yml -f docker-compose.local.override.yml -f "$OVR" -f "$COMPOSE_EXTRA" up -d oracle-worker
+else
+  docker compose -f docker-compose.yml -f docker-compose.local.override.yml -f "$OVR" up -d oracle-worker
+fi
 docker compose exec oracle-worker env | egrep 'DIFF_MASTERY_DELTA_THRESHOLD|DIFF_FUZZY_MATCH_ENABLED|DIFF_FUZZY_JACCARD_MIN' || true
 
 echo "[1] Using CORE=$CORE"
@@ -116,4 +120,8 @@ fi
 
 # Revert worker to normal env
 echo "[revert] Restore oracle-worker to normal"
-docker compose -f docker-compose.yml -f docker-compose.local.override.yml up -d oracle-worker
+if [ -n "${COMPOSE_EXTRA:-}" ]; then
+  docker compose -f docker-compose.yml -f docker-compose.local.override.yml -f "$COMPOSE_EXTRA" up -d oracle-worker
+else
+  docker compose -f docker-compose.yml -f docker-compose.local.override.yml up -d oracle-worker
+fi

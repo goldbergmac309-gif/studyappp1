@@ -59,13 +59,31 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq
 
-      - name: Build core-service and oracle-worker
+      - name: Free disk and show usage
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.local.override.yml build core-service oracle-worker
+          docker system prune -af --volumes || true
+          df -h
+
+      - name: Pull oracle-worker image
+        run: |
+          docker pull ghcr.io/${{ github.repository_owner }}/oracle-worker:latest || true
+
+      - name: Create CI oracle-worker override
+        run: |
+          cat > /tmp/ci.worker.image.override.yml << 'YAML'
+          services:
+            oracle-worker:
+              build: null
+              image: ghcr.io/${{ github.repository_owner }}/oracle-worker:latest
+          YAML
+
+      - name: Build core-service only
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml build core-service
 
       - name: Start stack
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.local.override.yml up -d
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml -f /tmp/ci.worker.image.override.yml up -d --no-build
         # Assumes docker-compose.local.override.yml exposes core-service on 3001
 
       - name: Wait for core-service health
@@ -80,7 +98,7 @@ jobs:
             sleep 2
           done
           echo "core-service not ready within timeout" >&2
-          docker compose -f docker-compose.yml -f docker-compose.local.override.yml logs core-service || true
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml -f /tmp/ci.worker.image.override.yml logs core-service || true
           exit 1
 
       - name: Run diffs E2E (STRICT)
@@ -89,20 +107,21 @@ jobs:
           DIFF_FUZZY_MATCH_ENABLED: "true"
           DIFF_FUZZY_JACCARD_MIN: "0.45"
           STRICT_DIFFS: "1"
+          COMPOSE_EXTRA: "/tmp/ci.worker.image.override.yml"
         run: |
           ./scripts/e2e_diffs.sh
 
       - name: Dump oracle-worker logs on failure
         if: failure()
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.local.override.yml logs oracle-worker || true
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml -f /tmp/ci.worker.image.override.yml logs oracle-worker || true
 
       - name: Dump core-service logs on failure
         if: failure()
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.local.override.yml logs core-service || true
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml -f /tmp/ci.worker.image.override.yml logs core-service || true
 
       - name: Teardown (always)
         if: always()
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.local.override.yml down -v || true
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml -f /tmp/ci.worker.image.override.yml down -v || true
