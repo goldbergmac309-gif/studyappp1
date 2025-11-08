@@ -1,0 +1,102 @@
+name: insight-diffs-ci
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "apps/oracle-service/**"
+      - "apps/core-service/**"
+      - "scripts/e2e_diffs.sh"
+      - "docs/insight-diffs.md"
+      - ".github/workflows/insight-diffs-ci.yml"
+  push:
+    branches: [ main, master ]
+
+jobs:
+  oracle-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install oracle-service dependencies
+        working-directory: apps/oracle-service
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run oracle-service tests
+        working-directory: apps/oracle-service
+        run: |
+          pytest -q
+
+  diffs-e2e:
+    runs-on: ubuntu-latest
+    needs: oracle-unit
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Build core-service and oracle-worker
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml build core-service oracle-worker
+
+      - name: Start stack
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml up -d
+        # Assumes docker-compose.local.override.yml exposes core-service on 3001
+
+      - name: Wait for core-service health
+        run: |
+          set -e
+          for i in {1..60}; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/health/ready || true)
+            echo "health/ready -> $code"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "core-service not ready within timeout" >&2
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml logs core-service || true
+          exit 1
+
+      - name: Run diffs E2E (STRICT)
+        env:
+          DIFF_MASTERY_DELTA_THRESHOLD: "0.01"
+          DIFF_FUZZY_MATCH_ENABLED: "true"
+          DIFF_FUZZY_JACCARD_MIN: "0.45"
+          STRICT_DIFFS: "1"
+        run: |
+          ./scripts/e2e_diffs.sh
+
+      - name: Dump oracle-worker logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml logs oracle-worker || true
+
+      - name: Dump core-service logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml logs core-service || true
+
+      - name: Teardown (always)
+        if: always()
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml down -v || true
