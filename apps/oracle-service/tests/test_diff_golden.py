@@ -28,8 +28,8 @@ def test_diff_golden(monkeypatch):
     expected = _load("diff_expected.json")
 
     out = _compute_insight_diffs(
-        prev_insight=prev["insight"],
-        cur_insight=cur["insight"],
+        prev=prev["insight"],
+        cur=cur["insight"],
         prev_graph=prev["conceptGraph"],
         cur_graph=cur["conceptGraph"],
     )
