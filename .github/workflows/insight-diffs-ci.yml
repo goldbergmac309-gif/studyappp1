@@ -31,6 +31,12 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: Install pytest
+        working-directory: apps/oracle-service
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+
       - name: Run oracle-service tests
         working-directory: apps/oracle-service
         run: |
