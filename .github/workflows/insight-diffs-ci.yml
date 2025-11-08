@@ -90,6 +90,11 @@ jobs:
         run: |
           docker compose -f docker-compose.yml -f docker-compose.local.override.yml logs oracle-worker || true
 
+      - name: Dump core-service logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.local.override.yml logs core-service || true
+
       - name: Teardown (always)
         if: always()
         run: |
