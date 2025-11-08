@@ -39,7 +39,12 @@ jobs:
       - name: Trivy scan core-service image
         uses: aquasecurity/trivy-action@0.24.0
         with:
+<<<<<<< HEAD
           image-ref: 'studyapp/core-service:ci'
+=======
+          scan-type: 'fs'
+          input: '.'
+>>>>>>> 8814fdaa7 (ci: fix pnpm version mismatch via action setup, correct Trivy input, and resolve Ruff unused imports)
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true
@@ -99,7 +104,11 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
+<<<<<<< HEAD
           version: 10.15.1
+=======
+          package_json: package.json
+>>>>>>> 8814fdaa7 (ci: fix pnpm version mismatch via action setup, correct Trivy input, and resolve Ruff unused imports)
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -154,7 +163,11 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
+<<<<<<< HEAD
           version: 10.15.1
+=======
+          package_json: package.json
+>>>>>>> 8814fdaa7 (ci: fix pnpm version mismatch via action setup, correct Trivy input, and resolve Ruff unused imports)
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
