@@ -23,11 +23,7 @@ from requests.exceptions import ConnectionError as ReqConnectionError, Timeout a
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from app.core.conceptual_engine import ConceptualEngine
-<<<<<<< HEAD
 from app.core.providers import LocalProvider, StubProvider, OpenAIProvider
-from app.core.topics import compute_subject_topics
-=======
->>>>>>> 8814fdaa7 (ci: fix pnpm version mismatch via action setup, correct Trivy input, and resolve Ruff unused imports)
 from config import get_settings
 from utils.s3 import download_to_bytes
 from utils.internal_api import InternalApi
